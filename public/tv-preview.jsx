@@ -1,3 +1,4 @@
+const APPT_ABBR_MAP={"NP":"NP","CCX":"CCX","Treatment":"TX","LOE":"LOE","Delivery":"DEL","Office Visit":"OV","Prophy":"PRO","PMT":"PMT","SRP":"SRP"};
 
 
 // ── Dental Abbreviation Engine ────────────────────────────────────────────────
@@ -99,7 +100,6 @@ function abbreviateNote(note,customAbbrevs=[]){
   return condenseNote(r);
 }
 
-import { useState, useEffect, useRef, useCallback, useMemo } from "react";
 
 // ── Sound: generated via Web Audio API — no external file needed ──────────────
 function playChimeTV(color="#4ade80"){
@@ -387,7 +387,7 @@ function CornerNotification({popup, ops, onDismiss, onShowQueue, queueCount, pul
   );
 }
 
-export default function TVDisplay() {
+function TVDisplay() {
   const [ops, setOps]   = useState(DEMO);
   const [antsOps, setAntsOps] = useState(new Set());
 

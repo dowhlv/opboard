@@ -1,4 +1,3 @@
-import React, { useState, useEffect, useRef, useCallback, useMemo } from "react";
 
 // ── Dental Abbreviation Engine ────────────────────────────────────────────────
 const ABBREV_PHRASES = [
@@ -87,7 +86,7 @@ const elapsed=d=>{
 };
 
 // ── Main Op Tablet ────────────────────────────────────────────────────────────
-export default function OpTablet(){
+function OpTablet(){
   const[op,setOp]=useState(OP_DATA);
   const[showStatusModal,setShowStatusModal]=useState(false);
   const[showApptModal,setShowApptModal]=useState(false);

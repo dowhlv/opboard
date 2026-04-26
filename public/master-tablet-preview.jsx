@@ -97,7 +97,6 @@ function abbreviateNote(note,customAbbrevs=[]){
   return condenseNote(r);
 }
 
-import React, { useState, useCallback, useEffect, useRef, createRef, useMemo } from "react";
 
 function ScaledWrapper({children,designW=1340,designH=800}){
   const[scale,setScale]=useState(1);
@@ -678,7 +677,7 @@ function FitText({text,maxSz,minSz=10,maxRows=3,color,fontFamily,fontWeight}){
   );
 }
 
-export default function MasterTablet(){
+function MasterTablet(){
   const[ops,setOps]=useState(DEMO);
   const[antsOps,setAntsOps]=useState(new Set());
   const[menu,setMenu]=useState(null);

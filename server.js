@@ -191,6 +191,10 @@ io.on('connection', socket => {
 
 // ── Serve static files + catch-all for SPA routing ───────────────────────────
 app.use(express.static(path.join(__dirname, 'public')));
+app.get('/', (req, res) => res.sendFile(path.join(__dirname, 'public', 'index.html')));
+app.get('/frontdesk', (req, res) => res.sendFile(path.join(__dirname, 'public', 'frontdesk.html')));
+app.get('/tv', (req, res) => res.sendFile(path.join(__dirname, 'public', 'tv.html')));
+app.get('/op/:num', (req, res) => res.sendFile(path.join(__dirname, 'public', 'op.html')));
 app.get('/{*path}', (req, res) => res.sendFile(path.join(__dirname, 'public', 'index.html')));
 
 const PORT = 3000;

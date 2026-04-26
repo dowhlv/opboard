@@ -101,7 +101,6 @@ function abbreviateNote(note,customAbbrevs=[]){
 
 
 
-import { useState, useEffect, useRef, useCallback, useMemo } from "react";
 
 function playChimeFD(color="#ff69b4"){try{const ctx=new(window.AudioContext||window.webkitAudioContext)();const freqs=color==="#ff69b4"?[880,1100,1320]:[660,880,1100];freqs.forEach((freq,i)=>{const osc=ctx.createOscillator();const gain=ctx.createGain();osc.connect(gain);gain.connect(ctx.destination);osc.type="sine";osc.frequency.value=freq;const t=ctx.currentTime+i*0.18;gain.gain.setValueAtTime(0,t);gain.gain.linearRampToValueAtTime(0.3,t+0.04);gain.gain.exponentialRampToValueAtTime(0.001,t+0.6);osc.start(t);osc.stop(t+0.65);});}catch(e){}}
 
@@ -356,7 +355,7 @@ function FitText({text,maxSz,minSz=10,maxRows=3,color,fontFamily,fontWeight}){
   );
 }
 
-export default function FrontDeskTablet(){
+function FrontDeskTablet(){
   const[ops,setOps]=useState(DEMO);
   const[antsOps,setAntsOps]=useState(new Set());
   const[dismissedOps,setDismissedOps]=useState(new Set());
