@@ -459,7 +459,7 @@ const safeEmit = (event, data) => {
 // ── Master Menu (PIN-protected admin panel) ───────────────────────────────────
 const MASTER_PIN = "4001";
 
-function MasterMenu({ statuses, setStatuses, apptTypes, setApptTypes, allOps, setAllOps, providers, setProviders, inactiveProviders, setInactiveProviders, onClose }) {
+function MasterMenu({ statuses, setStatuses, apptTypes, setApptTypes, allOps, setAllOps, providers, setProviders, inactiveProviders, setInactiveProviders, onClose, emitSocket }) {
   const [pinInput, setPinInput]   = useState("");
   const [pinError, setPinError]   = useState(false);
   const [unlocked, setUnlocked]   = useState(false);
@@ -542,7 +542,11 @@ function MasterMenu({ statuses, setStatuses, apptTypes, setApptTypes, allOps, se
           <div style={{fontSize:"12px",color:"rgba(255,255,255,0.35)",marginBottom:"14px"}}>Toggle ops on/off. Disabled ops won't appear in Assign Ops.</div>
           <div style={{display:"flex",flexWrap:"wrap",gap:"10px"}}>
             {allOps.map(({id,enabled})=>(
-              <button key={id} onMouseDown={()=>setAllOps(prev=>prev.map(o=>o.id===id?{...o,enabled:!o.enabled}:o))}
+              <button key={id} onMouseDown={()=>{
+                const updated=allOps.map(o=>o.id===id?{...o,enabled:!o.enabled}:o);
+                setAllOps(updated);
+                emitSocket('setAllOps',{allOps:updated});
+              }}
                 style={{width:"56px",height:"48px",borderRadius:"9px",border:`2px solid ${enabled?"rgba(74,222,128,0.6)":"rgba(255,255,255,0.15)"}`,background:enabled?"rgba(74,222,128,0.12)":"rgba(255,255,255,0.03)",color:enabled?"#4ade80":"rgba(255,255,255,0.3)",fontSize:"18px",fontWeight:700,cursor:"pointer",position:"relative"}}>
                 {id}
                 {!enabled&&<span style={{position:"absolute",top:1,right:3,fontSize:"10px",color:"rgba(255,80,80,0.8)"}}>✕</span>}
@@ -1177,6 +1181,7 @@ function MasterTablet(){
             providers={activeProviders} setProviders={setActiveProviders}
             inactiveProviders={inactiveProviders} setInactiveProviders={setInactiveProviders}
             onClose={()=>setShowMaster(false)}
+            emitSocket={emitSocket}
           />
         )}
       </div>
