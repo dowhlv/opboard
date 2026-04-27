@@ -1041,12 +1041,13 @@ function MasterTablet(){
                             e.stopPropagation();
                             if(assigned){
                               setOps(prev=>({...prev,[op]:{...prev[op],provider:null}}));
+                              emitSocket('setOpProvider',{op,provider:null});
                             } else if(takenByOther){
                               setConfirmTransfer({op,fromProvider:takenBy,toProvider:p});
                             } else {
                               setOps(prev=>({...prev,[op]:{...prev[op],provider:p,status:"awaiting",apptTypes:[],note:"",ts:new Date()}}));
-                            }
-                          }}>
+                              emitSocket('setOpProvider',{op,provider:p,status:'awaiting',apptTypes:[],note:''});
+                          }}}>
                           {op}
                         </button>
                       );
