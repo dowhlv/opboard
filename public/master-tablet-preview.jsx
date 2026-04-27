@@ -1103,6 +1103,7 @@ function MasterTablet(){
                   onMouseDown={()=>{
                     const{op,toProvider}=confirmTransfer;
                     setOps(prev=>({...prev,[op]:{...prev[op],provider:toProvider,status:"awaiting",apptTypes:[],note:"",ts:new Date()}}));
+                    emitSocket('setOpProvider',{op,provider:toProvider,status:'awaiting',apptTypes:[],note:''});
                     setConfirmTransfer(null);
                   }}>CONFIRM</button>
               </div>
@@ -1135,7 +1136,13 @@ function MasterTablet(){
                       // Unassign all ops from this provider
                       setOps(prev=>{
                         const updated={...prev};
-                        enabledOps.forEach(op=>{ if(updated[op]?.provider===name) updated[op]={...updated[op],provider:null}; });
+                                      enabledOps.forEach(op=>{
+                        if(updated[op]?.provider===name){
+                         const cur=updated[op];
+                          updated[op]={...cur,provider:null};
+                          emitSocket('setOpProvider',{op,provider:null,status:cur.status,apptTypes:cur.apptTypes||[],note:cur.note||''});
+                        }
+                      });
                         return updated;
                       });
                     } else {
