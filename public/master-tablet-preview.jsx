@@ -730,10 +730,11 @@ function MasterTablet(){
   const fmtTime=d=>{let h=d.getHours(),m=d.getMinutes(),ap=h>=12?"PM":"AM";h=h%12||12;return`${h}:${String(m).padStart(2,"0")} ${ap}`;};
 
   const setStatus=useCallback((op,key)=>{
-    setOps(p=>({...p,[op]:{...p[op],status:key,ts:key==="inactive"?null:new Date()}}));
-    setAntsOps(prev=>{const n=new Set(prev);n.delete(op);return n;});
-    setMenu(null);
-  },[]);
+  setOps(p=>({...p,[op]:{...p[op],status:key,ts:key==="inactive"?null:new Date()}}));
+  emitSocket('setStatus',{op,status:key});
+  setAntsOps(prev=>{const n=new Set(prev);n.delete(op);return n;});
+  setMenu(null);
+},[]);
   const setApptType=useCallback((op,newTypes)=>{
     setOps(p=>({...p,[op]:{...p[op],apptTypes:Array.isArray(newTypes)?newTypes:[]}}));
     emitSocket('setApptType',{op,apptTypes:Array.isArray(newTypes)?newTypes:[]});
