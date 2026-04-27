@@ -204,7 +204,7 @@ const DEMO = {
   7:{status:"ready",    note:"",               ts:new Date(Date.now()-90000),   apptTypes:["OV"],  provider:"Dr. Ngo" },
   8:{status:"treatment",note:"Implant consult",ts:new Date(Date.now()-1200000), apptTypes:["Tx"],  provider:"Dr. Ngo" },
   9:{status:"awaiting", note:"",               ts:new Date(Date.now()-180000),  apptTypes:[],  provider:"Dr. Ngo" },
-  9:{status:"awaiting", note:"",               ts:new Date(Date.now()-180000),  apptTypes:[],  provider:"Dr. Ngo" },
+  5:{status:"awaiting", note:"",  ts:new Date(Date.now()-180000), apptTypes:[], provider:"Dr. Tang"},
   10:{status:"pending", note:"SRP Q2",         ts:new Date(Date.now()-360000),  apptTypes:["SRP"], provider:"Dr. Ngo" },
   11:{status:"treatment",note:"Root canal",    ts:new Date(Date.now()-2100000), apptTypes:["Tx"],  provider:"Jordan"  },
   12:{status:"awaiting", note:"",               ts:new Date(Date.now()-30000),   apptTypes:["OV"],  provider:"Jordan"  },
