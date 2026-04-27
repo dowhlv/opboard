@@ -212,7 +212,7 @@ const DEMO = {
   14:{status:"fa",      note:"Whitening",      ts:new Date(Date.now()-600000),  apptTypes:["LOE"], provider:"Jordan"  },
 };
 const PROVIDERS = ["Dr. Tang","Dr. Ngo","Jordan"];
-const ALL_OPS   = Object.keys(DEMO).map(Number);
+const INIT_ALL_OPS = Object.keys(DEMO).map(Number).map(id=>({id,enabled:true}));
 
 // ── Popup Queue Item ──────────────────────────────────────────────────────────
 function QueueItem({ item, ops, onDismiss, onDragStart, onDragEnter, isDragging }) {
@@ -389,6 +389,7 @@ function CornerNotification({popup, ops, onDismiss, onShowQueue, queueCount, pul
 
 function TVDisplay() {
   const [ops, setOps]   = useState(DEMO);
+  const [allOpsState, setAllOpsState] = useState(INIT_ALL_OPS);
   const [antsOps, setAntsOps] = useState(new Set());
 
   const [,setTick]    = useState(0);
@@ -409,6 +410,7 @@ function TVDisplay() {
       if(state.customAbbrevs) setCustomAbbrevs(state.customAbbrevs);
       if(state.providerColors) setProviderColors(state.providerColors);
       if(state.activeProviders) setActiveProviders(state.activeProviders);
+      if(state.allOps) setAllOpsState(state.allOps);
       if(state.ops) setOps(prev=>{
         const merged={...prev};
         Object.keys(state.ops).forEach(k=>{
@@ -432,7 +434,7 @@ function TVDisplay() {
     window.addEventListener("offline",handleOffline);
     return()=>{window.removeEventListener("online",handleOnline);window.removeEventListener("offline",handleOffline);};
   },[]);
-
+  const ALL_OPS = allOpsState.filter(o=>o.enabled).map(o=>o.id);
   const fmtDateTime=d=>{const mo=d.getMonth()+1,day=d.getDate(),yr=d.getFullYear();let h=d.getHours(),m=d.getMinutes(),ampm=h>=12?'PM':'AM';h=h%12||12;return`${mo}/${day}/${yr}  ${h}:${String(m).padStart(2,'0')} ${ampm}`;};
   const offlineMinutes=Math.floor((now-lastUpdated)/60000);
   // Queue is DERIVED from ops status — RDY ops only for TV
