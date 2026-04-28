@@ -118,7 +118,7 @@ const DEMO={1:{status:"ready",note:"New patient",ts:new Date(Date.now()-120000),
   9:{status:"awaiting", note:"",               ts:new Date(Date.now()-180000),  apptTypes:[],  provider:"Dr. Ngo" },10:{status:"pending",note:"SRP Q2",ts:new Date(Date.now()-360000),apptTypes:["SRP"],provider:"Dr. Ngo"},11:{status:"treatment",note:"Root canal",ts:new Date(Date.now()-2100000),apptTypes:["Tx"],provider:"Jordan"},12:{status:"awaiting", note:"",               ts:new Date(Date.now()-30000),   apptTypes:["OV"],  provider:"Jordan"  },
   13:{status:"awaiting", note:"",               ts:new Date(Date.now()-90000),   apptTypes:[],  provider:"Jordan"  },14:{status:"fa",note:"Whitening",ts:new Date(Date.now()-600000),apptTypes:["LOE"],provider:"Jordan"}};
 const PROVIDERS=["Dr. Tang","Dr. Ngo","Jordan"];
-const ALL_OPS=Object.keys(DEMO).map(Number);
+const INIT_ALL_OPS = Object.keys(DEMO).map(Number).map(id=>({id,enabled:true}));
 
 // ── History Modal — working tabs + custom date range ─────────────────────────
 function HistoryModal({ ops, statuses, allOps, onClose }) {
@@ -357,6 +357,7 @@ function FitText({text,maxSz,minSz=10,maxRows=3,color,fontFamily,fontWeight}){
 
 function FrontDeskTablet(){
   const[ops,setOps]=useState(DEMO);
+  const [allOpsState, setAllOpsState] = useState(INIT_ALL_OPS);
   const[antsOps,setAntsOps]=useState(new Set());
   const[dismissedOps,setDismissedOps]=useState(new Set());
   const[queueOrder,setQueueOrder]=useState([]);
@@ -395,6 +396,7 @@ function FrontDeskTablet(){
     if(typeof socket==='undefined') return;
     const onState=state=>{
       if(state.customAbbrevs) setCustomAbbrevs(state.customAbbrevs);
+      if(state.allOps) setAllOpsState(state.allOps);
       if(state.ops) setOps(prev=>{
         const merged={...prev};
         Object.keys(state.ops).forEach(k=>{
@@ -465,6 +467,7 @@ const APPT_ABBR_MAP={"NP":"NP","CCX":"CCX","Treatment":"TX","LOE":"LOE","Deliver
   const prevLen=useRef(0);
 
   // Queue = all AWFA ops, sorted by manual queueOrder then by timestamp
+  const ALL_OPS=allOpsState.filter(o=>o.enabled).map(o=>o.id);
   const awfaOps=ALL_OPS.filter(op=>ops[op]?.provider&&ops[op]?.status==='pending');
   const popups=[...awfaOps]
     .sort((a,b)=>{
