@@ -723,7 +723,28 @@ function MasterTablet(){
 
   useEffect(()=>{const id=setInterval(()=>setTick(t=>t+1),60000);return()=>clearInterval(id);},[]);
   useEffect(()=>{const id=setInterval(()=>setNow(new Date()),1000);return()=>clearInterval(id);},[]);
-
+// Subscribe to server state broadcasts so master stays in sync with FD/TV
+  useEffect(()=>{
+    if(typeof socket==='undefined') return;
+    const onState=state=>{
+      if(state.allOps) setAllOpsState(state.allOps);
+      if(state.activeProviders) setActiveProviders(state.activeProviders);
+      if(state.inactiveProviders) setInactiveProviders(state.inactiveProviders);
+      if(state.statuses) setStatuses(state.statuses);
+      if(state.apptTypes) setAvailableApptTypes(state.apptTypes);
+      if(state.customAbbrevs) setCustomAbbrevs(state.customAbbrevs);
+      if(state.providerColors) setProviderColors(state.providerColors);
+      if(state.ops) setOps(prev=>{
+        const merged={...prev};
+        Object.keys(state.ops).forEach(k=>{
+          merged[k]={...state.ops[k],ts:state.ops[k].ts?new Date(state.ops[k].ts):null,noteUpdatedAt:state.ops[k].noteUpdatedAt||null};
+        });
+        return merged;
+      });
+    };
+    socket.on('state',onState);
+    return()=>{socket.off('state',onState);};
+  },[]);
   const SM=Object.fromEntries(statuses.map(s=>[s.key,s]));
   // emitSocket: safe wrapper — no-ops gracefully in preview where socket is undefined
   const emitSocket=useCallback((event,data)=>{
