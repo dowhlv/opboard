@@ -394,6 +394,7 @@ function TVDisplay() {
 
   const [,setTick]    = useState(0);
   const [isOnline, setIsOnline] = useState(true);
+  const [lastDisconnected, setLastDisconnected] = useState(null);
   const [customAbbrevs, setCustomAbbrevs] = useState([]);
   const [providerColors, setProviderColors] = useState({});
   const [activeProviders, setActiveProviders] = useState(PROVIDERS); // synced from server // offline detection
@@ -421,6 +422,7 @@ function TVDisplay() {
       setLastUpdated(new Date());
     };
     socket.on('state',onState);
+    socket.emit('requestState');
     socket.on('connect',()=>{setIsOnline(true);setLastUpdated(new Date());});
     socket.on('disconnect',()=>{setIsOnline(false);setLastDisconnected(new Date());});
     return()=>{socket.off('state',onState);socket.off('connect');socket.off('disconnect');};

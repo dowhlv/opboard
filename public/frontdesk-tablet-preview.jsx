@@ -396,9 +396,8 @@ function FrontDeskTablet(){
     if(typeof socket==='undefined') return;
     const onState=state=>{
       if(state.customAbbrevs) setCustomAbbrevs(state.customAbbrevs);
-      if(state.allOps) setAllOpsState(state.allOps);
-      if(state.ops) setOps(prev=>{
-        const merged={...prev};
+if(state.allOps) setAllOpsState(state.allOps);
+      if(state.ops) setOps(prev=>{        const merged={...prev};
         Object.keys(state.ops).forEach(k=>{
           merged[k]={...state.ops[k],ts:state.ops[k].ts?new Date(state.ops[k].ts):null,noteUpdatedAt:state.ops[k].noteUpdatedAt||null};
         });
@@ -409,6 +408,7 @@ function FrontDeskTablet(){
     socket.on('noteLock',({op,by})=>setNoteLocked({op,by}));
     socket.on('noteUnlock',()=>setNoteLocked(null));
     socket.on('state',onState);
+    socket.emit('requestState');
     socket.on('connect',()=>{setIsOnline(true);setLastUpdated(new Date());});
     socket.on('disconnect',()=>{setIsOnline(false);setLastDisconnected(new Date());});
     const onUnload=()=>socket.emit('noteUnlock',{});

@@ -743,6 +743,7 @@ function MasterTablet(){
       });
     };
     socket.on('state',onState);
+    socket.emit('requestState');
     return()=>{socket.off('state',onState);};
   },[]);
   const SM=Object.fromEntries(statuses.map(s=>[s.key,s]));

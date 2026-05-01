@@ -1,7 +1,7 @@
 const express = require('express');
 // ── Status History Logging ────────────────────────────────────────────────────
 const fs = require('fs');
-const HISTORY_DIR  = '/var/lib/opboard';
+const HISTORY_DIR  = process.env.OPBOARD_DATA_DIR || '/var/lib/opboard';
 const HISTORY_FILE = `${HISTORY_DIR}/history.json`;
 const STATE_FILE   = `${HISTORY_DIR}/state.json`;
 
@@ -95,28 +95,6 @@ const now = new Date();
 const msUntilMidnight = new Date(now.getFullYear(),now.getMonth(),now.getDate()+1,0,1,0)-now;
 setTimeout(()=>{ pruneHistory(); setInterval(pruneHistory, 24*60*60*1000); }, msUntilMidnight);
 
-loadState();
-
-// Normalize ts values for broadcast — always send as numbers
-function broadcastState(){
-  const normalized={...state,ops:{}};
-  Object.entries(state.ops).forEach(([k,v])=>{
-    normalized.ops[k]={...v,ts:v.ts?Number(v.ts):null};
-  });
-  io.emit('state',normalized);
-}
-
-
-
-const http = require('http');
-const { Server } = require('socket.io');
-const path = require('path');
-
-const app = express();
-const server = http.createServer(app);
-const io = new Server(server);
-
-// ── Shared state (source of truth) ───────────────────────────────────────────
 let state = {
   ops: {
     1:  { status:'ready',    note:'New patient',    noteUpdatedAt:null,    ts: Number(Date.now()-120000),  apptTypes:['NP'],  provider:'Dr. Tang' },
@@ -159,11 +137,35 @@ let state = {
   allOps: Array.from({length:14},(_,i)=>({id:i+1,enabled:true})),
   opPin: '0063', // Default op tablet PIN
 };
+loadState();
+
+// Normalize ts values for broadcast — always send as numbers
+function broadcastState(){
+  const normalized={...state,ops:{}};
+  Object.entries(state.ops).forEach(([k,v])=>{
+    normalized.ops[k]={...v,ts:v.ts?Number(v.ts):null};
+  });
+  io.emit('state',normalized);
+}
+
+
+
+const http = require('http');
+const { Server } = require('socket.io');
+const path = require('path');
+
+const app = express();
+const server = http.createServer(app);
+const io = new Server(server);
+
+// ── Shared state (source of truth) ───────────────────────────────────────────
+
 
 // ── Socket.io ─────────────────────────────────────────────────────────────────
 io.on('connection', socket => {
   console.log('Connected:', socket.id);
   broadcastState();
+  socket.on('requestState', () => broadcastState());
 
   socket.on('setStatus',   ({op,status})   => { if(state.ops[op]){ state.ops[op].status=status; state.ops[op].ts=Number(Date.now()); if(['awaiting','inactive'].includes(status)){state.ops[op].apptTypes=[];state.ops[op].note='';} logHistory(op,status,state.ops[op].apptTypes,state.ops[op].provider); saveState(); } io.emit('state',{...state,ops:Object.fromEntries(Object.entries(state.ops).map(([k,v])=>[ k,{...v,ts:v.ts?Number(v.ts):null}]))}); });
   socket.on('setApptType', ({op,apptTypes}) => { if(state.ops[op]){ state.ops[op].apptTypes=Array.isArray(apptTypes)?apptTypes:[]; saveState(); } broadcastState(); });
@@ -175,7 +177,7 @@ io.on('connection', socket => {
   });
   socket.on('setStatuses', ({statuses})  => { state.statuses=statuses; broadcastState(); });
   socket.on('setApptTypes',({apptTypes}) => { state.apptTypes=apptTypes; broadcastState(); });
-  socket.on('setAllOps',   ({allOps})    => { state.allOps=allOps; broadcastState(); });
+  socket.on('setAllOps',   ({allOps})    => { state.allOps=allOps; saveState(); broadcastState(); });   
   socket.on('setOpPin',          ({pin})      => { state.opPin=pin; saveState(); broadcastState(); });
   socket.on('setAdminPin',       ({pin})      => { state.adminPin=pin; saveState(); broadcastState(); });
   socket.on('setProviderDefaults',({defaults}) => { state.providerDefaults=defaults; saveState(); broadcastState(); });

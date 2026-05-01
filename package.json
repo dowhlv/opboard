@@ -1,4 +1,8 @@
 {
+  "scripts": {
+    "start": "node server.js",
+    "dev": "OPBOARD_DATA_DIR=$HOME/.opboard-data node server.js"
+  },
   "dependencies": {
     "express": "^5.2.1",
     "socket.io": "^4.8.3"
