@@ -459,7 +459,7 @@ const safeEmit = (event, data) => {
 // ── Master Menu (PIN-protected admin panel) ───────────────────────────────────
 const MASTER_PIN = "4001";
 
-function MasterMenu({ statuses, setStatuses, apptTypes, setApptTypes, allOps, setAllOps, providers, setProviders, inactiveProviders, setInactiveProviders, onClose, emitSocket }) {
+function MasterMenu({ statuses, setStatuses, apptTypes, setApptTypes, allOps, setAllOps, providers, setProviders, inactiveProviders, setInactiveProviders, onClose, emitSocket, setShowHistory }) {
   const [pinInput, setPinInput]   = useState("");
   const [pinError, setPinError]   = useState(false);
   const [unlocked, setUnlocked]   = useState(false);
@@ -497,6 +497,7 @@ function MasterMenu({ statuses, setStatuses, apptTypes, setApptTypes, allOps, se
       { id:"statuses",  label:"Edit Status",     icon:"◈",  desc:"Add, remove, rename and reorder statuses" },
       { id:"appt",      label:"Edit Appt Types", icon:"📋", desc:"Add, remove, rename and reorder appointment types" },
       { id:"colors",    label:"Edit Colors",     icon:"🎨", desc:"Customize status and appt type colors" },
+      { id:"history",   label:"Status History",  icon:"⏱",  desc:"View historical status timeline", action:true },
     ];
     return (
       <div style={{position:"absolute",inset:0,background:"rgba(0,0,0,0.88)",backdropFilter:"blur(6px)",zIndex:950,display:"flex",alignItems:"center",justifyContent:"center"}}
@@ -508,7 +509,7 @@ function MasterMenu({ statuses, setStatuses, apptTypes, setApptTypes, allOps, se
             <button onMouseDown={onClose} style={{background:"none",border:"none",color:"rgba(255,255,255,0.4)",fontSize:"20px",cursor:"pointer"}}>✕</button>
           </div>
           {items.map(item=>(
-            <div key={item.id} onMouseDown={()=>setScreen(item.id)}
+            <div key={item.id} onMouseDown={()=>{ if(item.action){onClose();setShowHistory(true);} else {setScreen(item.id);} }}
               style={{display:"flex",alignItems:"center",gap:"14px",padding:"14px 16px",borderRadius:"10px",border:"1px solid rgba(255,255,255,0.08)",background:"rgba(255,255,255,0.03)",marginBottom:"8px",cursor:"pointer",transition:"background .15s"}}
               onMouseEnter={e=>e.currentTarget.style.background="rgba(255,255,255,0.07)"}
               onMouseLeave={e=>e.currentTarget.style.background="rgba(255,255,255,0.03)"}>
@@ -932,7 +933,6 @@ function MasterTablet(){
             </svg>
             ASSIGN OPS
           </button>
-          <button className="analytics-btn" onMouseDown={e=>{e.stopPropagation();setMenu(null);setShowHistory(true);}}>◎  STATUS HISTORY</button>
           <button onMouseDown={e=>{e.stopPropagation();setMenu(null);setShowMaster(true);}}
             style={{position:"absolute",bottom:"10px",right:"16px",background:"rgba(255,255,255,0.06)",border:"1px solid rgba(255,255,255,0.12)",borderRadius:"8px",padding:"8px 12px",cursor:"pointer",color:"rgba(255,255,255,0.5)",fontSize:"20px",lineHeight:1}}>≡</button>
         </div>
@@ -1202,6 +1202,7 @@ function MasterTablet(){
             inactiveProviders={inactiveProviders} setInactiveProviders={setInactiveProviders}
             onClose={()=>setShowMaster(false)}
             emitSocket={emitSocket}
+            setShowHistory={setShowHistory}
           />
         )}
       </div>
