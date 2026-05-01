@@ -617,7 +617,7 @@ const APPT_ABBR_MAP={"NP":"NP","CCX":"CCX","Treatment":"TX","LOE":"LOE","Deliver
                     <div style={{fontFamily:"'Bebas Neue',sans-serif",fontSize:numSz,color:"rgba(255,255,255,0.3)"}}>—</div>
                   </div>
                 )}
-                <div style={S.roomCol}>
+                <div style={{...S.roomCol,display:"grid",gridTemplateRows:`repeat(${Math.max(rooms.length,3)},1fr)`}}>
                   {rooms.map(op=>{
                     const{status,note,ts,apptTypes=[]}=ops[op]||{};
                     const cfg=SM[status]||SM.awaiting;
@@ -652,32 +652,31 @@ const APPT_ABBR_MAP={"NP":"NP","CCX":"CCX","Treatment":"TX","LOE":"LOE","Deliver
                         {/* Right: appt badges + note */}
                         {!isInactive&&(
                           <div style={{flex:1,display:"flex",flexDirection:"row",
-                            alignItems:"stretch",padding:"4px 6px",gap:"8px",minWidth:0,overflow:"hidden"}}>
+                            alignItems:"center",padding:"4px 6px",gap:"8px",minWidth:0,overflow:"hidden"}}>
 
                             {/* Appt badges — vertical letters */}
                             <button
                               onMouseDown={e=>{e.stopPropagation();setMenu(apptOpen?null:{op,type:"appt"});}}
                               style={{flexShrink:0,background:"transparent",border:"none",
-                                padding:0,cursor:"pointer",alignSelf:"stretch",
-                                display:"flex",alignItems:"stretch",gap:"2px",width:apptW}}>
+                                padding:"4px 0",cursor:"pointer",alignSelf:(apptTypes||[]).length>2?"stretch":"center",
+                                display:"grid",gridTemplateColumns:`repeat(${Math.min(Math.max((apptTypes||[]).length,1),2)},${apptW})`,gridAutoRows:"1fr",gap:"2px",minHeight:(apptTypes||[]).length>2?undefined:`calc(${numSz} + ${timSz} + 14px)`}}>
                               {(apptTypes||[]).length===0&&(
-                                <div style={{flex:1,borderRadius:"6px",
+                                <div style={{borderRadius:"6px",
                                   background:cfg.key==="awaiting"?"rgba(0,0,0,0.12)":"rgba(255,255,255,0.08)",
                                   border:`1.5px solid ${cfg.key==="awaiting"?"rgba(0,0,0,0.3)":"rgba(255,255,255,0.25)"}`,
-                                  display:"flex",alignItems:"center",justifyContent:"center",
-                                  marginTop:"5%",marginBottom:"5%"}}>
+                                  display:"flex",alignItems:"center",justifyContent:"center"}}>
                                   <span style={{fontSize:bdgSz,fontWeight:700,
                                     color:cfg.key==="awaiting"?"rgba(0,0,0,0.4)":"rgba(255,255,255,0.35)"}}>—</span>
                                 </div>
                               )}
                               {[...(apptTypes||[])].sort((a,b)=>APPT_TYPES.indexOf(a)-APPT_TYPES.indexOf(b)).map(t=>(
-                                <div key={t} style={{width:apptW,flexShrink:0,borderRadius:"6px",
+                                <div key={t} style={{borderRadius:"6px",
                                   background:`${cfg.numColor}22`,border:`1.5px solid ${cfg.numColor}55`,
                                   display:"flex",alignItems:"center",justifyContent:"center",
-                                  flexDirection:"column",marginTop:"5%",marginBottom:"5%",
+                                  flexDirection:"column",
                                   overflow:"hidden",padding:"2px 2px"}}>
                                   {(APPT_ABBR_MAP[t]||t).toUpperCase().split('').map((ch,idx)=>(
-                                    <span key={idx} style={{fontSize:bdgSz,fontWeight:800,
+                                    <span key={idx} style={{fontSize:(apptTypes||[]).length>8?`calc(${bdgSz} * 0.35)`:(apptTypes||[]).length>6?`calc(${bdgSz} * 0.4)`:(apptTypes||[]).length>4?`calc(${bdgSz} * 0.5)`:(apptTypes||[]).length>2?`calc(${bdgSz} * 0.65)`:bdgSz,fontWeight:800,
                                       color:cfg.numColor,lineHeight:1.05,display:"block",textAlign:"center"}}>
                                       {ch}
                                     </span>
@@ -777,17 +776,6 @@ const APPT_ABBR_MAP={"NP":"NP","CCX":"CCX","Treatment":"TX","LOE":"LOE","Deliver
                 <span style={{fontSize:"12px",fontWeight:700,color:s.key==="awaiting"?"#fff":s.numColor}}>{s.abbr}</span>
               </div>
             ))}
-          </div>
-          {/* Center: test buttons */}
-          <div style={{flex:1,display:"flex",justifyContent:"center",gap:"8px"}}>
-            <button onMouseDown={e=>{e.stopPropagation();const k=Object.keys(ops).filter(k=>ops[k]?.status!=='inactive');if(k.length){const op=parseInt(k[Math.floor(Math.random()*k.length)]);setOps(p=>({...p,[op]:{...p[op],status:'pending',ts:new Date()}}));}}}
-              style={{fontSize:"11px",padding:"4px 10px",background:"rgba(255,105,180,0.15)",border:"1px solid rgba(255,105,180,0.4)",borderRadius:"6px",color:"#ff69b4",cursor:"pointer",fontFamily:"'Bebas Neue',sans-serif",letterSpacing:"0.08em"}}>
-              + AWFA
-            </button>
-            <button onMouseDown={e=>{e.stopPropagation();setOps(DEMO);}}
-              style={{fontSize:"11px",padding:"4px 10px",background:"rgba(255,255,255,0.06)",border:"1px solid rgba(255,255,255,0.15)",borderRadius:"6px",color:"rgba(255,255,255,0.5)",cursor:"pointer",fontFamily:"'Bebas Neue',sans-serif",letterSpacing:"0.08em"}}>
-              RESET
-            </button>
           </div>
           {/* Right: queue + history */}
           <div style={{display:"flex",gap:"8px",flexShrink:0}}>

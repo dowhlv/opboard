@@ -806,7 +806,7 @@ function MasterTablet(){
               <div key={name} style={S.col}>
                 <div style={{...S.provName,fontSize:namSz}}>{name}</div>
                 <div style={S.provDiv}/>
-                <div style={S.roomCol}>
+                <div style={{...S.roomCol,display:"grid",gridTemplateRows:`repeat(${Math.max(rooms.length,3)},1fr)`}}>
                   {rooms.map(op=>{
                     if(!cardRefs.current[op]) cardRefs.current[op]=createRef();
                     const{status,note,ts,apptTypes=[]}=ops[op]||{};
@@ -845,20 +845,19 @@ function MasterTablet(){
                         {/* Right: appt badge (50% narrower than before) + note */}
                         {!isInactive&&(
                           <div style={{flex:1,display:"flex",flexDirection:"row",
-                            alignItems:"stretch",padding:"4px 6px",gap:"8px",minWidth:0,overflow:"hidden"}}>
+                            alignItems:"center",padding:"4px 6px",gap:"8px",minWidth:0,overflow:"hidden"}}>
 
                             {/* Appt type — each type gets its own fixed-width badge, letters stacked top-to-bottom upright */}
                             <button className="appt-btn"
                               onMouseDown={e=>{e.stopPropagation();setMenu(apptOpen?null:{op,type:"appt"});}}
                               style={{flexShrink:0,background:"transparent",border:"none",
-                                padding:0,cursor:"pointer",alignSelf:"stretch",
-                                display:"flex",alignItems:"stretch",gap:"2px"}}>
+                                padding:"4px 0",cursor:"pointer",alignSelf:(apptTypes||[]).length>2?"stretch":"center",
+                                display:"grid",gridTemplateColumns:`repeat(${Math.min(Math.max((apptTypes||[]).length,1),2)},${apptW})`,gridAutoRows:"1fr",gap:"2px",minHeight:(apptTypes||[]).length>2?undefined:`calc(${numSz} + ${timSz} + 14px)`}}>
                               {(apptTypes||[]).length===0&&(
-                                <div style={{width:apptW,borderRadius:"6px",
+                                <div style={{borderRadius:"6px",
                                   background:cfg.key==="awaiting"?"rgba(0,0,0,0.12)":"rgba(255,255,255,0.08)",
                                   border:`1.5px solid ${cfg.key==="awaiting"?"rgba(0,0,0,0.3)":"rgba(255,255,255,0.25)"}`,
-                                  display:"flex",alignItems:"center",justifyContent:"center",
-                                  marginTop:"5%",marginBottom:"5%"}}>
+                                  display:"flex",alignItems:"center",justifyContent:"center"}}>
                                   <span style={{fontSize:bdgSz,fontWeight:700,
                                     color:cfg.key==="awaiting"?"rgba(0,0,0,0.4)":"rgba(255,255,255,0.35)"}}>
                                     —
@@ -868,15 +867,14 @@ function MasterTablet(){
                               {[...(apptTypes||[])].sort((a,b)=>
                                 INIT_APPT_TYPES.indexOf(a)-INIT_APPT_TYPES.indexOf(b)
                               ).map(t=>(
-                                <div key={t} style={{width:apptW,flexShrink:0,borderRadius:"6px",
+                                <div key={t} style={{borderRadius:"6px",
                                   background:`${cfg.numColor}22`,
                                   border:`1.5px solid ${cfg.numColor}55`,
                                   display:"flex",alignItems:"center",justifyContent:"center",
                                   flexDirection:"column",
-                                  marginTop:"5%",marginBottom:"5%",
                                   overflow:"hidden",padding:"2px 2px"}}>
                                   {(APPT_ABBR_MAP[t]||t).toUpperCase().split('').map((ch,idx)=>(
-                                    <span key={idx} style={{fontSize:bdgSz,fontWeight:800,
+                                    <span key={idx} style={{fontSize:(apptTypes||[]).length>8?`calc(${bdgSz} * 0.35)`:(apptTypes||[]).length>6?`calc(${bdgSz} * 0.4)`:(apptTypes||[]).length>4?`calc(${bdgSz} * 0.5)`:(apptTypes||[]).length>2?`calc(${bdgSz} * 0.65)`:bdgSz,fontWeight:800,
                                       color:cfg.numColor,lineHeight:1.05,display:"block",
                                       textAlign:"center"}}>
                                       {ch}

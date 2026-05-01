@@ -497,12 +497,13 @@ function TVDisplay() {
         <div style={{...S.providerGrid, gridTemplateColumns:`repeat(${n},1fr)`}}>
           {providerCols.map(({name,rooms},ci)=>{
             const safeN=Math.max(n,1);
-            const maxRooms=providerCols.length>0?Math.max(...providerCols.map(p=>p.rooms.length)):1;
-            const numSize  =`clamp(120px,${30/safeN}vw,480px)`;
-            const badgeSize=`clamp(66px,${14.4/safeN}vw,240px)`;
-            const apptSize =`clamp(33px,${6.6/safeN}vw,120px)`;
-            const noteSize =`clamp(32px,${5/safeN}vw,80px)`;  // 32px min — readable at 15ft
-            const timerSize=`clamp(22px,${3/safeN}vw,50px)`;
+            const maxRooms=Math.max(rooms.length,3);
+            const rowScale=3/maxRooms;
+            const numSize  =`clamp(60px,${30/safeN*rowScale}vw,480px)`;
+            const badgeSize=`clamp(33px,${14.4/safeN*rowScale}vw,240px)`;
+            const apptSize =`clamp(20px,${6.6/safeN*rowScale}vw,120px)`;
+            const noteSize =`clamp(20px,${5/safeN*rowScale}vw,80px)`;
+            const timerSize=`clamp(14px,${3/safeN*rowScale}vw,50px)`;
             const nameSize =`clamp(48px,${10/safeN}vw,144px)`;
             const provColor=providerColors?.[name]||'#fff';
             return(
@@ -533,23 +534,35 @@ function TVDisplay() {
                         border:antsOps.has(op)?"none":cleanWithAppt?`3px dashed rgba(160,160,160,0.8)`:`2px solid ${cfg.border}`,
                         boxShadow:cleanWithAppt?"none":status==="awaiting"?"0 0 16px rgba(255,255,255,0.2)":"none",
                         opacity:isInactive?0.3:1,animation:cardAnim}}>
-                        {/* Upper 60%: op + appt + status + timer */}
-                        <div style={{position:"absolute",top:0,left:0,right:0,height:"60%",display:"flex",alignItems:"center",padding:"0 14px",gap:"clamp(8px,1vw,18px)",overflow:"hidden"}}>
-                          <span style={{fontFamily:"'Bebas Neue',sans-serif",fontSize:numSize,lineHeight:1,color:textCol,flexShrink:0,minWidth:"1.2ch"}}>{op}</span>
-                          {!isInactive&&(apptTypes&&apptTypes.length>0
-                            ? <div style={{display:"flex",gap:"4px",overflow:"hidden",flexShrink:1}}>
-                                {[...(apptTypes||[])].sort((a,b)=>(STATUSES.indexOf?-1:0)||(typeof INIT_APPT_TYPES!=="undefined"?INIT_APPT_TYPES.indexOf(a)-INIT_APPT_TYPES.indexOf(b):0)).map(t=>(
-                                  <span key={t} style={{fontSize:apptSize,fontWeight:700,padding:"4px 10px",borderRadius:"6px",background:`${textCol}22`,border:`2px solid ${textCol}55`,color:textCol,flexShrink:0,whiteSpace:"nowrap",textTransform:"uppercase"}}>{APPT_ABBR_MAP[t]||t}</span>
-                                ))}
+                        {/* Tile body: op# left, badges + note right */}
+                        <div style={{display:"flex",flexDirection:"row",alignItems:"stretch",height:"100%",padding:"0",gap:"clamp(6px,0.6vw,14px)",overflow:"hidden"}}>
+                          {/* Left: op# + elapsed below */}
+                          <div style={{display:"flex",flexDirection:"column",alignItems:"center",justifyContent:"center",padding:"4px 14px",flexShrink:0,gap:"4px"}}>
+                            <span style={{fontFamily:"'Bebas Neue',sans-serif",fontSize:numSize,lineHeight:1,color:textCol}}>{op}</span>
+                            {ts&&!isInactive&&<span style={{fontSize:timerSize,fontWeight:700,color:textCol,opacity:0.7,whiteSpace:"nowrap",lineHeight:1}}>{elapsed(ts)}</span>}
+                          </div>
+                          {/* Right: badges + note */}
+                          {!isInactive&&(
+                            <div style={{flex:1,display:"flex",flexDirection:"row",alignItems:"center",padding:"6px 10px 6px 0",gap:"clamp(6px,0.8vw,14px)",minWidth:0,overflow:"hidden"}}>
+                              {/* Badges: 2-row grid */}
+                              {apptTypes&&apptTypes.length>0
+                                ? <div style={{display:"grid",gridTemplateColumns:`repeat(${Math.min(Math.max(apptTypes.length,1),2)},minmax(clamp(34px,3vw,72px),auto))`,gridAutoRows:"1fr",gap:"4px",alignSelf:apptTypes.length>2?"stretch":"center",flexShrink:0,padding:"4px 0",minHeight:apptTypes.length>2?undefined:`calc(${numSize} + ${timerSize} + 14px)`}}>
+                                    {[...(apptTypes||[])].sort((a,b)=>(typeof INIT_APPT_TYPES!=="undefined"?INIT_APPT_TYPES.indexOf(a)-INIT_APPT_TYPES.indexOf(b):0)).map(t=>(
+                                      <div key={t} style={{borderRadius:"6px",background:`${textCol}22`,border:`2px solid ${textCol}55`,display:"flex",flexDirection:"column",alignItems:"center",justifyContent:"center",padding:"2px 6px",overflow:"hidden"}}>
+                                        {(APPT_ABBR_MAP[t]||t).toUpperCase().split('').map((ch,idx)=>(
+                                          <span key={idx} style={{fontSize:apptTypes.length>8?`calc(${apptSize} * 0.3)`:apptTypes.length>6?`calc(${apptSize} * 0.4)`:apptTypes.length>4?`calc(${apptSize} * 0.45)`:apptTypes.length>2?`calc(${apptSize} * 0.55)`:`calc(${apptSize} * 0.85)`,fontWeight:800,color:textCol,lineHeight:1.05,display:"block",textAlign:"center"}}>{ch}</span>
+                                        ))}
+                                      </div>
+                                    ))}
+                                  </div>
+                                : <div style={{borderRadius:"6px",background:"transparent",border:emptyBorder,display:"flex",alignItems:"center",justifyContent:"center",alignSelf:"stretch",padding:"4px 0",minWidth:"clamp(34px,3vw,72px)",flexShrink:0}}><span style={{fontSize:apptSize,fontWeight:700,color:emptyDashCol}}>—</span></div>
+                              }
+                              {/* Note */}
+                              <div style={{flex:1,display:"flex",alignItems:"center",overflow:"hidden",minWidth:0}}>
+                                <span style={{fontSize:noteSize,fontWeight:700,color:note?noteCol:"transparent",overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap",width:"100%"}}>{abbreviatedNotes[op]||""}</span>
                               </div>
-                            : <span style={{fontSize:apptSize,fontWeight:700,padding:"4px 12px",borderRadius:"6px",background:"transparent",border:emptyBorder,color:emptyDashCol,flexShrink:0}}>—</span>
+                            </div>
                           )}
-                          {!isInactive&&<span style={{fontFamily:"'Bebas Neue',sans-serif",fontSize:badgeSize,lineHeight:1,color:textCol,flexShrink:0,letterSpacing:"0.04em"}}>{cfg.abbr}</span>}
-                          {ts&&!isInactive&&<span style={{marginLeft:"auto",fontSize:timerSize,fontWeight:700,color:textCol,flexShrink:0}}>{elapsed(ts)}</span>}
-                        </div>
-                        {/* Lower 40%: note */}
-                        <div style={{position:"absolute",top:"60%",left:0,right:0,height:"40%",display:"flex",alignItems:"center",padding:"0 14px",overflow:"hidden"}}>
-                          <span style={{fontSize:noteSize,fontWeight:700,color:note?noteCol:"transparent",overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap",width:"100%"}}>{abbreviatedNotes[op]||""}</span>
                         </div>
                       </div>
                     );
@@ -560,27 +573,17 @@ function TVDisplay() {
             );
           })}
         </div>
-
-        {/* ── Test buttons (demo only) ── */}
-        { (
-          <div style={{position:"absolute",bottom:"24px",left:"28px",display:"flex",gap:"12px",zIndex:500}}>
-            <button onClick={()=>{
-              const activeOps = ALL_OPS.filter(op=>ops[op]?.provider);
-              const op = activeOps[Math.floor(Math.random()*activeOps.length)];
-              setOps(p=>({...p,[op]:{...p[op],status:"ready",ts:new Date()}}));
-              setPopups(p=>[...p,{id:Date.now(),op,type:"rdy",ts:new Date()}]);
-            }} style={{fontFamily:"'Bebas Neue',sans-serif",fontSize:"16px",letterSpacing:"0.12em",padding:"8px 18px",borderRadius:"8px",background:"rgba(74,222,128,0.15)",border:"1px solid #4ade80",color:"#4ade80",cursor:"pointer"}}>+ RDY</button>
-            <button onClick={()=>{
-              // TEST ONLY — set all RDY ops back to Clean
-              setOps(p=>{
-                const updated={...p};
-                ALL_OPS.forEach(op=>{ if(updated[op]?.status==='ready') updated[op]={...updated[op],status:'awaiting',ts:new Date()}; });
-                return updated;
-              });
-            }} style={{fontFamily:"'Bebas Neue',sans-serif",fontSize:"16px",letterSpacing:"0.12em",padding:"8px 18px",borderRadius:"8px",background:"rgba(255,255,255,0.06)",border:"1px solid rgba(255,255,255,0.2)",color:"rgba(255,255,255,0.5)",cursor:"pointer"}}>CLEAR ALL ⚠ TEST</button>
-          </div>
         )}
 
+        {/* ── Status legend (bottom-left) ── */}
+        <div style={{position:"absolute",bottom:"24px",left:"28px",display:"flex",alignItems:"center",gap:"16px",zIndex:500,background:"rgba(0,0,0,0.45)",padding:"10px 18px",borderRadius:"10px",border:"1px solid rgba(255,255,255,0.1)"}}>
+          {STATUSES.filter(s=>s.key!=="inactive").map(s=>(
+            <div key={s.key} style={{display:"flex",alignItems:"center",gap:"6px"}}>
+              <span style={{width:"12px",height:"12px",borderRadius:"50%",background:s.key==="awaiting"?"#fff":s.numColor,flexShrink:0}}/>
+              <span style={{fontSize:"14px",fontWeight:700,color:s.key==="awaiting"?"#fff":s.numColor,fontFamily:"'Bebas Neue',sans-serif",letterSpacing:"0.08em"}}>{s.abbr}</span>
+            </div>
+          ))}
+        </div>
         {/* ── Queue screen ── */}
         {showKioskExit&&(
           <div style={{position:"absolute",inset:0,background:"rgba(0,0,0,0.88)",zIndex:999,display:"flex",alignItems:"center",justifyContent:"center"}}>
@@ -601,7 +604,7 @@ function TVDisplay() {
 
 // ── Styles ────────────────────────────────────────────────────────────────────
 const S = {
-  root: { position:"relative", width:"1920px", height:"1080px", background:"#080a0c", backgroundImage:"radial-gradient(ellipse at 20% 0%, rgba(59,130,246,0.08) 0%, transparent 50%)", fontFamily:"'DM Sans',sans-serif", display:"flex", flexDirection:"column", padding:"18px 22px 14px", gap:"12px", boxSizing:"border-box", overflow:"hidden" },
+  root: { position:"relative", width:"1920px", height:"1080px", background:"#080a0c", backgroundImage:"radial-gradient(ellipse at 20% 0%, rgba(59,130,246,0.08) 0%, transparent 50%)", fontFamily:"'DM Sans',sans-serif", display:"flex", flexDirection:"column", padding:"18px 22px 90px", gap:"12px", boxSizing:"border-box", overflow:"hidden" },
   header: { display:"flex", alignItems:"center", borderBottom:"2px solid rgba(255,255,255,0.15)", paddingBottom:"12px", flexShrink:0, gap:"16px" },
   headerTitle: { fontFamily:"'Bebas Neue',sans-serif", fontSize:"clamp(24px,3.2vw,48px)", letterSpacing:"0.15em", color:"#fff" },
   headerSub: { fontSize:"clamp(10px,1.1vw,16px)", letterSpacing:"0.2em", color:"rgba(255,255,255,0.3)", fontWeight:300 },
