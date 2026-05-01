@@ -687,6 +687,9 @@ function MasterTablet(){
   const[antsOps,setAntsOps]=useState(new Set());
   const[menu,setMenu]=useState(null);
   const[showAssign,setShowAssign]=useState(false);
+  const[pendingAssignOps,setPendingAssignOps]=useState(null);
+  const[pendingActiveProviders,setPendingActiveProviders]=useState(null);
+  const[pendingInactiveProviders,setPendingInactiveProviders]=useState(null);
   const[showHistory,setShowHistory]=useState(false);
   const[noteEdit,setNoteEdit]=useState(null);
   const noteDraftRef=useRef(""); // always tracks latest draft value
@@ -713,6 +716,18 @@ function MasterTablet(){
   },[]);
   useEffect(()=>{if(!showMaster){clearTimeout(adminTimeoutRef.current);clearInterval(countdownRef.current);setAdminCountdown(null);}},[showMaster]);
   const[inactiveProviders,setInactiveProviders]=useState(INIT_INACTIVE);
+  useEffect(()=>{
+    if(showAssign){
+      setPendingAssignOps({...ops});
+      setPendingActiveProviders([...activeProviders]);
+      setPendingInactiveProviders([...inactiveProviders]);
+    } else {
+      setPendingAssignOps(null);
+      setPendingActiveProviders(null);
+      setPendingInactiveProviders(null);
+    }
+  },[showAssign]);
+  
   const[confirmProvider,setConfirmProvider]=useState(null);
   const[confirmTransfer,setConfirmTransfer]=useState(null);
   const[statuses,setStatuses]=useState(INIT_STATUSES);
@@ -1052,8 +1067,9 @@ function MasterTablet(){
                   </div>
                   <div style={{display:"flex",flexWrap:"wrap",gap:"6px"}}>
                     {enabledOps.map(op=>{
-                      const assigned=ops[op]?.provider===p;
-                      const takenBy=ops[op]?.provider;
+const opData=pendingAssignOps?.[op]||ops[op];
+                      const assigned=opData?.provider===p;
+                      const takenBy=opData?.provider;
                       const takenByOther=takenBy&&takenBy!==p;
                       return(
                         <button key={op}
@@ -1065,13 +1081,11 @@ function MasterTablet(){
                           onMouseDown={e=>{
                             e.stopPropagation();
                             if(assigned){
-                              setOps(prev=>({...prev,[op]:{...prev[op],provider:null}}));
-                              emitSocket('setOpProvider',{op,provider:null});
+                              setPendingAssignOps(prev=>({...prev,[op]:{...prev[op],provider:null}}));
                             } else if(takenByOther){
                               setConfirmTransfer({op,fromProvider:takenBy,toProvider:p});
                             } else {
-                              setOps(prev=>({...prev,[op]:{...prev[op],provider:p,status:"awaiting",apptTypes:[],note:"",ts:new Date()}}));
-                              emitSocket('setOpProvider',{op,provider:p,status:'awaiting',apptTypes:[],note:''});
+                              setPendingAssignOps(prev=>({...prev,[op]:{...prev[op],provider:p,status:"awaiting",apptTypes:[],note:"",ts:new Date()}}));
                           }}}>
                           {op}
                         </button>
@@ -1091,7 +1105,7 @@ function MasterTablet(){
                 <div style={{fontSize:"12px",color:"rgba(255,255,255,0.2)",fontStyle:"italic",marginBottom:"8px",flexShrink:0}}>None</div>
               )}
               <div style={{display:"flex",flexWrap:"wrap",gap:"6px",marginBottom:"6px",flexShrink:0}}>
-                {inactiveProviders.map(p=>(
+                {inactiveProviders.map(p=>(                  
                   <button key={p}
                     onMouseDown={e=>{e.stopPropagation();setConfirmProvider({name:p,action:"activate"});}}
                     style={{padding:"6px 14px",borderRadius:"8px",border:"1px solid rgba(255,255,255,0.2)",background:"rgba(255,255,255,0.04)",color:"rgba(255,255,255,0.45)",fontFamily:"'DM Sans',sans-serif",fontSize:"13px",fontWeight:600,cursor:"pointer"}}>
@@ -1099,10 +1113,32 @@ function MasterTablet(){
                   </button>
                 ))}
               </div>
-
-              <button style={{marginTop:"8px",width:"100%",padding:"8px",background:"rgba(255,255,255,0.06)",border:"1px solid rgba(255,255,255,0.12)",borderRadius:"8px",color:"rgba(255,255,255,0.6)",fontFamily:"'DM Sans',sans-serif",cursor:"pointer",fontSize:"13px",flexShrink:0}}
-                onMouseDown={()=>setShowAssign(false)}>Close</button>
-            </div>
+              <div style={{display:"flex",gap:"10px",marginTop:"8px",flexShrink:0}}>
+                <button style={{flex:1,padding:"10px",background:"rgba(255,80,80,0.12)",border:"1px solid rgba(255,80,80,0.4)",borderRadius:"8px",color:"rgba(255,120,120,0.95)",fontFamily:"'Bebas Neue',sans-serif",fontSize:"16px",letterSpacing:"0.12em",cursor:"pointer"}}
+                  onMouseDown={()=>setShowAssign(false)}>CANCEL</button>
+                <button style={{flex:1,padding:"10px",background:"rgba(74,222,128,0.15)",border:"1px solid rgba(74,222,128,0.5)",borderRadius:"8px",color:"#4ade80",fontFamily:"'Bebas Neue',sans-serif",fontSize:"16px",letterSpacing:"0.12em",cursor:"pointer"}}
+                  onMouseDown={()=>{
+                    if(pendingAssignOps){
+                      Object.keys(pendingAssignOps).forEach(op=>{
+                        const oldProvider=ops[op]?.provider;
+                        const newProvider=pendingAssignOps[op]?.provider;
+                        if(oldProvider!==newProvider){
+                          setOps(prev=>({...prev,[op]:pendingAssignOps[op]}));
+                          emitSocket('setOpProvider',{op:Number(op),provider:newProvider,status:pendingAssignOps[op]?.status||'awaiting',apptTypes:pendingAssignOps[op]?.apptTypes||[],note:pendingAssignOps[op]?.note||''});
+                        }
+                      });
+                    }
+                    if(pendingActiveProviders){
+                      setActiveProviders(pendingActiveProviders);
+                      emitSocket('setProviders',{activeProviders:pendingActiveProviders,inactiveProviders:pendingInactiveProviders});
+                    }
+                    if(pendingInactiveProviders){
+                      setInactiveProviders(pendingInactiveProviders);
+                    }
+                    setShowAssign(false);
+                  }}>ACCEPT</button>
+              </div>
+          </div>
           </div>
         )}
 
