@@ -155,7 +155,13 @@ io.on('connection', socket => {
   socket.on('setNote',     ({op,note})     => { if(state.ops[op]){ state.ops[op].note=note; state.ops[op].noteUpdatedAt=Date.now(); saveState(); } broadcastState(); });
   socket.on('setProviders',({activeProviders,inactiveProviders}) => { state.activeProviders=activeProviders; state.inactiveProviders=inactiveProviders; broadcastState(); });
   socket.on('setOpProvider',({op,provider,status,apptTypes,note}) => {
-    if(state.ops[op]){ state.ops[op].provider=provider; if(status!==undefined)state.ops[op].status=status; if(apptTypes!==undefined)state.ops[op].apptTypes=Array.isArray(apptTypes)?apptTypes:[]; if(note!==undefined)state.ops[op].note=note; state.ops[op].ts=Date.now(); }
+    if(!state.ops[op]) state.ops[op]={provider:null,status:'awaiting',apptTypes:[],note:'',ts:null,noteUpdatedAt:null};
+    state.ops[op].provider=provider;
+    if(status!==undefined) state.ops[op].status=status;
+    if(apptTypes!==undefined) state.ops[op].apptTypes=Array.isArray(apptTypes)?apptTypes:[];
+    if(note!==undefined) state.ops[op].note=note;
+    state.ops[op].ts=Date.now();
+    saveState();
     broadcastState();
   });
   socket.on('setStatuses', ({statuses})  => { state.statuses=statuses; broadcastState(); });

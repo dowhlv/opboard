@@ -396,6 +396,7 @@ function FrontDeskTablet(){
   useEffect(()=>{
     if(typeof socket==='undefined') return;
     const onState=state=>{
+      if(state.allOps) setAllOpsState(state.allOps);
       if(state.customAbbrevs) setCustomAbbrevs(state.customAbbrevs);
 
       if(state.activeProviders) setActiveProviders(state.activeProviders);
