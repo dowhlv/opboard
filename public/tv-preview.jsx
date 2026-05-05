@@ -102,6 +102,36 @@ function abbreviateNote(note,customAbbrevs=[]){
 
 
 // ── Sound: generated via Web Audio API — no external file needed ──────────────
+// ── FitText: renders text that auto-shrinks to fit maxRows, never truncates ──
+function FitText({text,maxSz,minSz=10,maxRows=3,color,fontFamily,fontWeight}){
+  const ref=useRef(null);
+  const[sz,setSz]=useState(maxSz);
+  useEffect(()=>{
+    const el=ref.current;
+    if(!el||!text)return;
+    let current=maxSz;
+    el.style.fontSize=current+'px';
+    while(current>minSz){
+      const lineH=current*1.2;
+      const maxH=lineH*maxRows;
+      if(el.scrollHeight<=maxH+2)break;
+      current=Math.max(minSz,current-1);
+      el.style.fontSize=current+'px';
+    }
+    setSz(current);
+  },[text,maxSz,maxRows,minSz]);
+  return(
+    <div ref={ref} style={{
+      fontSize:sz+'px',color,fontFamily,fontWeight,
+      lineHeight:1.2,wordBreak:"break-word",
+      overflowWrap:"break-word",overflow:"hidden",
+      display:"-webkit-box",WebkitBoxOrient:"vertical",
+      WebkitLineClamp:maxRows,
+      textAlign:"left",width:"100%"
+    }}>{text}</div>
+  );
+}
+
 function playChimeTV(color="#4ade80"){
   try{
     const ctx=new(window.AudioContext||window.webkitAudioContext)();
@@ -594,7 +624,7 @@ function TVDisplay() {
                               }
                               {/* Note */}
                               <div style={{flex:1,display:"flex",alignItems:"center",overflow:"hidden",minWidth:0}}>
-                                <span style={{fontSize:noteSize,fontWeight:700,color:note?noteCol:"transparent",overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap",width:"100%"}}>{abbreviatedNotes[op]||""}</span>
+                                <FitText text={abbreviatedNotes[op]||""} maxSz={parseInt(noteSize.match(/clamp\((\d+)px,[^,]+,(\d+)px\)/)?.[2]||noteSize.match(/(\d+)px/)?.[1]||"60")} minSz={10} maxRows={3} color={note?noteCol:"transparent"} fontWeight={700}/>
                               </div>
                             </div>
                           )}
