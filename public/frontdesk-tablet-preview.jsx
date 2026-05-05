@@ -360,7 +360,6 @@ function FrontDeskTablet(){
   const [allOpsState, setAllOpsState] = useState([]);
   const [activeProviders, setActiveProviders] = useState(PROVIDERS);
   const[antsOps,setAntsOps]=useState(new Set());
-  const[dismissedOps,setDismissedOps]=useState(new Set());
   const[queueOrder,setQueueOrder]=useState([]);
   const[showQueue,setShowQueue]=useState(false);
   const[dragId,setDragId]=useState(null);
@@ -494,20 +493,9 @@ const APPT_ABBR_MAP={"NP":"NP","CCX":"CCX","Treatment":"TX","LOE":"LOE","Deliver
   // eslint-disable-next-line react-hooks/exhaustive-deps
   },[awfaOps.length, awfaOps.join('-')]); // stable dep: changes only when ops enter/leave queue
 
-  // When an op's status changes TO pending, remove it from dismissedOps so popup reappears
-  useEffect(()=>{
-    const prev=prevOpsRef.current;
-    awfaOps.forEach(op=>{
-      if(prev[op]?.status!=='pending'&&ops[op]?.status==='pending'){
-        setDismissedOps(d=>{const n=new Set(d);n.delete(op);return n;});
-      }
-    });
-    prevOpsRef.current={...ops};
-  });
 
-  // Active popup = first undismissed AWFA op
-  const undismissedPopups=popups.filter(p=>!dismissedOps.has(p.op));
-  const activePopup=undismissedPopups[0]||null;
+  // Active popup = first AWFA op
+  const activePopup=popups[0]||null;
 
   // Sound when new ops enter queue
   useEffect(()=>{
@@ -520,11 +508,6 @@ const APPT_ABBR_MAP={"NP":"NP","CCX":"CCX","Treatment":"TX","LOE":"LOE","Deliver
     return()=>{};
   },[popups.length]);
 
-  // Dismiss = add op to dismissedOps — won't show again until status cycles
-  const dismissFirst=()=>{
-    if(!activePopup)return;
-    if(activePopup)setDismissedOps(d=>new Set([...d,activePopup.op]));
-  };
 
   const handleDragEnd=()=>{setDragId(null);setDragOverId(null);};
 
@@ -626,19 +609,12 @@ const APPT_ABBR_MAP={"NP":"NP","CCX":"CCX","Treatment":"TX","LOE":"LOE","Deliver
               </div>
             )}
             <div style={{flex:1}}/>
-            {undismissedPopups.length > 1 && (
+            {popups.length > 1 && (
               <div style={{fontFamily:"'Bebas Neue',sans-serif",fontSize:'14px',
                 color:'rgba(255,255,255,0.4)',letterSpacing:'0.1em',flexShrink:0}}>
-                +{undismissedPopups.length - 1} MORE
+                +{popups.length - 1} MORE
               </div>
             )}
-            <button onMouseDown={()=>{if(activePopup)setDismissedOps(d=>new Set([...d,activePopup.op]));}}
-              style={{flexShrink:0,padding:'6px 16px',borderRadius:'7px',cursor:'pointer',
-                background:'rgba(0,0,0,0.3)',border:'1px solid rgba(255,255,255,0.2)',
-                fontFamily:"'Bebas Neue',sans-serif",fontSize:'14px',letterSpacing:'0.1em',
-                color:'rgba(255,255,255,0.7)'}}>
-              DISMISS
-            </button>
             <button onMouseDown={e=>{e.stopPropagation();setShowQueue(true);}}
               style={{flexShrink:0,padding:'6px 16px',borderRadius:'7px',cursor:'pointer',
                 background: activePopup.type==='awfa' ? 'rgba(255,105,180,0.3)' : 'rgba(74,222,128,0.3)',
