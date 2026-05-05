@@ -278,11 +278,12 @@ function ModalMenu({op, menuType, ops, onClose, onSetStatus, onSetApptType, stat
       <div style={{display:"flex",flexDirection:"column",gap:"6px"}}>
         {(apptTypes||INIT_APPT_TYPES).map(t=>{
           const active=(selectedTypes||[]).includes(t);
+          const accent=ops[op]?.status==="awaiting"?"#fff":cfg.numColor;
           return(
             <button key={t}
               style={{padding:"10px 14px",borderRadius:"10px",cursor:"pointer",textAlign:"left",
-                background:active?`${cfg.numColor}22`:"rgba(255,255,255,0.04)",
-                border:`2px solid ${active?cfg.numColor+"55":"rgba(255,255,255,0.07)"}`,
+                background:active?(accent==="#fff"?accent:`${accent}22`):"rgba(255,255,255,0.04)",
+                border:`2px solid ${active?accent+"55":"rgba(255,255,255,0.07)"}`,
                 display:"flex",alignItems:"center",gap:"12px"}}
               onMouseDown={e=>{
                 e.stopPropagation();
@@ -291,12 +292,12 @@ function ModalMenu({op, menuType, ops, onClose, onSetStatus, onSetApptType, stat
                 onSetApptType(op,next);
               }}>
               <span style={{width:"16px",height:"16px",borderRadius:"4px",flexShrink:0,
-                background:active?cfg.numColor:"transparent",
+                background:active?(accent==="#fff"?"#000":accent):"transparent",
                 border:active?"none":"1px solid rgba(255,255,255,0.3)",
                 display:"flex",alignItems:"center",justifyContent:"center",
-                fontSize:"10px",color:"#000",fontWeight:700}}>{active?"✓":""}</span>
+                fontSize:"10px",color:accent==="#fff"?"#fff":"#000",fontWeight:700}}>{active?"✓":""}</span>
               <span style={{fontSize:"16px",fontWeight:700,flex:1,
-                color:active?cfg.numColor:"rgba(255,255,255,0.85)"}}>{t}</span>
+                color:active?(accent==="#fff"?"#000":accent):"rgba(255,255,255,0.85)"}}>{t}</span>
             </button>
           );
         })}
@@ -372,7 +373,7 @@ function FloatingMenu({op, menuType, ops, cardRef, onClose, onSetStatus, onSetAp
       </div>
       {menuType==="status"
         ? statuses.map(s=>{
-            const dc=s.key==="awaiting"?"#ffffff":s.numColor;
+            const dc=s.key==="awaiting"?(status===s.key?"#000":"#fff"):s.numColor;
             return(
               <div key={s.key} className="menu-item"
                 style={{background:status===s.key?s.menuBg:"#1e1e24",borderColor:status===s.key?s.menuBorder:"transparent"}}
@@ -1021,7 +1022,7 @@ function MasterTablet(){
               <div style={{display:"flex",flexDirection:"column",gap:"6px"}}>
                 {statuses.filter(s=>s.key!=="inactive").map(s=>{
                   const active=ops[menu.op]?.status===s.key;
-                  const dc=s.key==="awaiting"?"#111114":s.numColor;
+                  const dc=s.key==="awaiting"?(active?"#000":"#fff"):s.numColor;
                   return(
                     <button key={s.key}
                       style={{padding:"10px 14px",borderRadius:"10px",cursor:"pointer",textAlign:"left",
