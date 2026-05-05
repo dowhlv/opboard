@@ -1162,8 +1162,10 @@ const opData=pendingAssignOps?.[op]||ops[op];
                 <button style={{flex:1,padding:"12px",background:"rgba(74,222,128,0.15)",border:"1px solid rgba(74,222,128,0.5)",borderRadius:"9px",color:"#4ade80",fontFamily:"'Bebas Neue',sans-serif",fontSize:"18px",letterSpacing:"0.12em",cursor:"pointer"}}
                   onMouseDown={()=>{
                     const{op,toProvider}=confirmTransfer;
-                    setOps(prev=>({...prev,[op]:{...prev[op],provider:toProvider,status:"awaiting",apptTypes:[],note:"",ts:new Date()}}));
-                    emitSocket('setOpProvider',{op,provider:toProvider,status:'awaiting',apptTypes:[],note:''});
+                    setPendingAssignOps(prev=>{
+                      const base=prev||{...ops};
+                      return{...base,[op]:{...base[op],provider:toProvider,status:"awaiting",apptTypes:[],note:"",ts:new Date()}};
+                    });
                     setConfirmTransfer(null);
                   }}>CONFIRM</button>
               </div>
@@ -1191,23 +1193,22 @@ const opData=pendingAssignOps?.[op]||ops[op];
                   onMouseDown={()=>{
                     const {name, action} = confirmProvider;
                     if(action==="inactivate"){
-                      setActiveProviders(prev=>prev.filter(p=>p!==name));
-                      setInactiveProviders(prev=>[...prev,name]);
-                      // Unassign all ops from this provider
-                      setOps(prev=>{
-                        const updated={...prev};
-                                      enabledOps.forEach(op=>{
-                        if(updated[op]?.provider===name){
-                         const cur=updated[op];
-                          updated[op]={...cur,provider:null};
-                          emitSocket('setOpProvider',{op,provider:null,status:cur.status,apptTypes:cur.apptTypes||[],note:cur.note||''});
-                        }
-                      });
+                      setPendingActiveProviders(prev=>(prev||activeProviders).filter(p=>p!==name));
+                      setPendingInactiveProviders(prev=>[...(prev||inactiveProviders),name]);
+                      // Draft-unassign all ops from this provider
+                      setPendingAssignOps(prev=>{
+                        const base=prev||{...ops};
+                        const updated={...base};
+                        enabledOps.forEach(op=>{
+                          if(updated[op]?.provider===name){
+                            updated[op]={...updated[op],provider:null};
+                          }
+                        });
                         return updated;
                       });
                     } else {
-                      setInactiveProviders(prev=>prev.filter(p=>p!==name));
-                      setActiveProviders(prev=>[...prev,name]);
+                      setPendingInactiveProviders(prev=>(prev||inactiveProviders).filter(p=>p!==name));
+                      setPendingActiveProviders(prev=>[...(prev||activeProviders),name]);
                     }
                     setConfirmProvider(null);
                   }}>CONFIRM</button>
