@@ -599,6 +599,53 @@ const APPT_ABBR_MAP={"NP":"NP","CCX":"CCX","Treatment":"TX","LOE":"LOE","Deliver
           </div>
           </div>
 
+        {/* AWFA Banner — shows at bottom when there are undismissed AWFA ops */}
+        {activePopup && !showQueue && (
+          <div style={{
+            flexShrink:0,
+            background: activePopup.type==='awfa' ? 'rgba(255,105,180,0.18)' : 'rgba(74,222,128,0.18)',
+            borderTop: `2px solid ${activePopup.type==='awfa' ? '#ff69b4' : '#4ade80'}`,
+            padding:'8px 20px',
+            display:'flex',alignItems:'center',gap:'16px',
+            animation:`${activePopup.type==='awfa' ? 'awfaBannerPulse' : 'rdyBannerPulse'} 2.5s ease-in-out infinite`
+          }}>
+            <div style={{fontFamily:"'Bebas Neue',sans-serif",fontSize:'22px',letterSpacing:'0.15em',
+              color: activePopup.type==='awfa' ? '#ff69b4' : '#4ade80',flexShrink:0}}>
+              {activePopup.type==='awfa' ? '⚠ AWAITING FA' : '✓ READY'}
+            </div>
+            <div style={{fontFamily:"'Bebas Neue',sans-serif",fontSize:'28px',letterSpacing:'0.1em',
+              color:'#fff',flexShrink:0}}>
+              OP {activePopup.op}
+            </div>
+            {activePopup.ts && (
+              <div style={{fontSize:'14px',fontWeight:700,color:'rgba(255,255,255,0.5)',flexShrink:0}}>
+                {elapsed(activePopup.ts)}
+              </div>
+            )}
+            <div style={{flex:1}}/>
+            {undismissedPopups.length > 1 && (
+              <div style={{fontFamily:"'Bebas Neue',sans-serif",fontSize:'14px',
+                color:'rgba(255,255,255,0.4)',letterSpacing:'0.1em',flexShrink:0}}>
+                +{undismissedPopups.length - 1} MORE
+              </div>
+            )}
+            <button onMouseDown={()=>{if(activePopup)setDismissedOps(d=>new Set([...d,activePopup.op]));}}
+              style={{flexShrink:0,padding:'6px 16px',borderRadius:'7px',cursor:'pointer',
+                background:'rgba(0,0,0,0.3)',border:'1px solid rgba(255,255,255,0.2)',
+                fontFamily:"'Bebas Neue',sans-serif",fontSize:'14px',letterSpacing:'0.1em',
+                color:'rgba(255,255,255,0.7)'}}>
+              DISMISS
+            </button>
+            <button onMouseDown={e=>{e.stopPropagation();setShowQueue(true);}}
+              style={{flexShrink:0,padding:'6px 16px',borderRadius:'7px',cursor:'pointer',
+                background: activePopup.type==='awfa' ? 'rgba(255,105,180,0.3)' : 'rgba(74,222,128,0.3)',
+                border:`1px solid ${activePopup.type==='awfa' ? '#ff69b4' : '#4ade80'}`,
+                fontFamily:"'Bebas Neue',sans-serif",fontSize:'14px',letterSpacing:'0.1em',
+                color:'#fff'}}>
+              VIEW QUEUE
+            </button>
+          </div>
+        )}
 
         <div style={{...S.grid,gridTemplateColumns:`repeat(${n},1fr)`}}>
           {providerCols.map(({name,rooms},ci)=>{
@@ -718,53 +765,6 @@ const APPT_ABBR_MAP={"NP":"NP","CCX":"CCX","Treatment":"TX","LOE":"LOE","Deliver
           })}
         </div>
 
-        {/* AWFA Banner — shows at bottom when there are undismissed AWFA ops */}
-        {activePopup && !showQueue && (
-          <div style={{
-            flexShrink:0,
-            background: activePopup.type==='awfa' ? 'rgba(255,105,180,0.18)' : 'rgba(74,222,128,0.18)',
-            borderTop: `2px solid ${activePopup.type==='awfa' ? '#ff69b4' : '#4ade80'}`,
-            padding:'8px 20px',
-            display:'flex',alignItems:'center',gap:'16px',
-            animation:`${activePopup.type==='awfa' ? 'awfaBannerPulse' : 'rdyBannerPulse'} 2.5s ease-in-out infinite`
-          }}>
-            <div style={{fontFamily:"'Bebas Neue',sans-serif",fontSize:'22px',letterSpacing:'0.15em',
-              color: activePopup.type==='awfa' ? '#ff69b4' : '#4ade80',flexShrink:0}}>
-              {activePopup.type==='awfa' ? '⚠ AWAITING FA' : '✓ READY'}
-            </div>
-            <div style={{fontFamily:"'Bebas Neue',sans-serif",fontSize:'28px',letterSpacing:'0.1em',
-              color:'#fff',flexShrink:0}}>
-              OP {activePopup.op}
-            </div>
-            {activePopup.ts && (
-              <div style={{fontSize:'14px',fontWeight:700,color:'rgba(255,255,255,0.5)',flexShrink:0}}>
-                {elapsed(activePopup.ts)}
-              </div>
-            )}
-            <div style={{flex:1}}/>
-            {undismissedPopups.length > 1 && (
-              <div style={{fontFamily:"'Bebas Neue',sans-serif",fontSize:'14px',
-                color:'rgba(255,255,255,0.4)',letterSpacing:'0.1em',flexShrink:0}}>
-                +{undismissedPopups.length - 1} MORE
-              </div>
-            )}
-            <button onMouseDown={()=>{if(activePopup)setDismissedOps(d=>new Set([...d,activePopup.op]));}}
-              style={{flexShrink:0,padding:'6px 16px',borderRadius:'7px',cursor:'pointer',
-                background:'rgba(0,0,0,0.3)',border:'1px solid rgba(255,255,255,0.2)',
-                fontFamily:"'Bebas Neue',sans-serif",fontSize:'14px',letterSpacing:'0.1em',
-                color:'rgba(255,255,255,0.7)'}}>
-              DISMISS
-            </button>
-            <button onMouseDown={e=>{e.stopPropagation();setShowQueue(true);}}
-              style={{flexShrink:0,padding:'6px 16px',borderRadius:'7px',cursor:'pointer',
-                background: activePopup.type==='awfa' ? 'rgba(255,105,180,0.3)' : 'rgba(74,222,128,0.3)',
-                border:`1px solid ${activePopup.type==='awfa' ? '#ff69b4' : '#4ade80'}`,
-                fontFamily:"'Bebas Neue',sans-serif",fontSize:'14px',letterSpacing:'0.1em',
-                color:'#fff'}}>
-              VIEW QUEUE
-            </button>
-          </div>
-        )}
 
         {/* Legend + buttons */}
         <div style={{display:"flex",alignItems:"center",gap:"12px",flexShrink:0,paddingTop:"4px",borderTop:"1px solid rgba(255,255,255,0.06)"}}>
