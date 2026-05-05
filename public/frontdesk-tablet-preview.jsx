@@ -383,6 +383,8 @@ function FrontDeskTablet(){
   const[reminder,setReminder]=useState(null);
   const[notifStyle,setNotifStyle]=useState('corner'); // 'corner'|'topbar'|'cardonly'|'firstonly' // {op, status, elapsed} for 10-min warning
   const[dismissedReminders,setDismissedReminders]=useState(new Set()); // {op-status-ts} keys
+  const[awfaPopupDismissed,setAwfaPopupDismissed]=useState({}); // {op:timestamp_ms}
+  const[popupTick,setPopupTick]=useState(0);
   const soundTimer=useRef(null);
   const toastRef=useRef(null);
 
@@ -495,6 +497,31 @@ const APPT_ABBR_MAP={"NP":"NP","CCX":"CCX","Treatment":"TX","LOE":"LOE","Deliver
 
   // Active popup = first AWFA op
   const activePopup=popups[0]||null;
+  // Tick every 30s to re-evaluate popup queue (5min reappear logic)
+  useEffect(()=>{const id=setInterval(()=>setPopupTick(t=>t+1),30000);return()=>clearInterval(id);},[]);
+  // AWFA popup modal queue: popups not dismissed within last 5 min
+  const awfaPopupQueue=popups.filter(p=>{
+    const d=awfaPopupDismissed[p.op];
+    return !d||(Date.now()-d>=5*60*1000);
+  });
+  // eslint-disable-next-line no-unused-vars
+  const _popupTickDep=popupTick;
+  const currentAwfaPopup=awfaPopupQueue[0]||null;
+  const dismissAwfaPopup=()=>{
+    if(!currentAwfaPopup)return;
+    setAwfaPopupDismissed(d=>({...d,[currentAwfaPopup.op]:Date.now()}));
+  };
+  // Clear dismissal when op leaves AWFA status (fresh popup on re-entry)
+  useEffect(()=>{
+    setAwfaPopupDismissed(d=>{
+      const next={...d};
+      let changed=false;
+      Object.keys(next).forEach(op=>{
+        if(ops[op]?.status!=='pending'){delete next[op];changed=true;}
+      });
+      return changed?next:d;
+    });
+  },[ops]);
 
   // Sound when new ops enter queue
   useEffect(()=>{
@@ -869,6 +896,16 @@ const APPT_ABBR_MAP={"NP":"NP","CCX":"CCX","Treatment":"TX","LOE":"LOE","Deliver
           </div>
         )}
       </div>
+        {currentAwfaPopup && (
+          <div onMouseDown={dismissAwfaPopup}
+            style={{position:"absolute",inset:0,background:"rgba(0,0,0,0.78)",backdropFilter:"blur(4px)",zIndex:900,display:"flex",alignItems:"center",justifyContent:"center",cursor:"pointer"}}>
+            <div style={{padding:"60px 80px",borderRadius:"24px",background:"rgba(255,105,180,0.18)",border:"3px solid #ff69b4",boxShadow:"0 0 80px rgba(255,105,180,0.6)",textAlign:"center",fontFamily:"'Bebas Neue',sans-serif"}}>
+              <div style={{fontSize:"72px",letterSpacing:"0.15em",color:"#ff69b4",lineHeight:1,marginBottom:"24px"}}>AWAITING FA</div>
+              <div style={{fontSize:"96px",letterSpacing:"0.1em",color:"#fff",lineHeight:1,marginBottom:"32px"}}>OP {currentAwfaPopup.op}</div>
+              <div style={{fontSize:"22px",letterSpacing:"0.2em",color:"rgba(255,255,255,0.55)",fontFamily:"'DM Sans',sans-serif",fontWeight:600}}>TAP TO DISMISS</div>
+            </div>
+          </div>
+        )}
     </ScaledWrapper>
   );
 }
