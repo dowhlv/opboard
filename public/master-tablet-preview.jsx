@@ -1295,6 +1295,25 @@ const opData=pendingAssignOps?.[op]||ops[op];
             setShowHistory={setShowHistory}
           />
         )}
+        {showQueue && (
+          <div style={{position:"absolute",inset:0,background:"rgba(8,10,12,0.97)",zIndex:350,display:"flex",flexDirection:"column",padding:"24px 32px",gap:"12px"}}>
+            <div style={{display:"flex",alignItems:"center",justifyContent:"space-between",marginBottom:"6px"}}>
+              <div style={{fontFamily:"'Bebas Neue',sans-serif",fontSize:"32px",letterSpacing:"0.15em",color:"#4ade80"}}>READY QUEUE</div>
+              <button onClick={()=>setShowQueue(false)} style={{fontFamily:"'Bebas Neue',sans-serif",fontSize:"16px",letterSpacing:"0.12em",padding:"8px 20px",borderRadius:"7px",background:"rgba(255,255,255,0.07)",border:"1px solid rgba(255,255,255,0.2)",color:"rgba(255,255,255,0.7)",cursor:"pointer"}}>BACK</button>
+            </div>
+            <div style={{fontSize:"11px",letterSpacing:"0.1em",color:"rgba(255,255,255,0.3)",fontFamily:"'DM Sans',sans-serif",marginBottom:"4px"}}>STATUS CHANGE REMOVES FROM QUEUE</div>
+            <div style={{flex:1,overflowY:"auto",display:"flex",flexDirection:"column",gap:"8px"}}>
+              {readyOps.length===0 && (<div style={{textAlign:"center",color:"rgba(255,255,255,0.4)",fontFamily:"'DM Sans',sans-serif",padding:"40px"}}>No ops ready</div>)}
+              {readyOps.map(item=>(
+                <div key={item.op} style={{padding:"16px 20px",background:"rgba(74,222,128,0.08)",border:"1px solid rgba(74,222,128,0.3)",borderRadius:"10px",display:"flex",alignItems:"center",gap:"20px"}}>
+                  <div style={{fontFamily:"'Bebas Neue',sans-serif",fontSize:"36px",color:"#4ade80",letterSpacing:"0.05em",minWidth:"60px"}}>OP {item.op}</div>
+                  <div style={{flex:1,fontFamily:"'DM Sans',sans-serif",fontSize:"16px",color:"#fff"}}>{ops[item.op]?.provider||""}</div>
+                  {item.ts && (<div style={{fontSize:"14px",color:"rgba(255,255,255,0.5)",fontFamily:"'Bebas Neue',sans-serif",letterSpacing:"0.1em"}}>{Math.floor((Date.now()-new Date(item.ts).getTime())/60000)}m</div>)}
+                </div>
+              ))}
+            </div>
+          </div>
+        )}
       </div>
     </ScaledWrapper>
   );

@@ -193,7 +193,6 @@ io.on('connection', socket => {
   // Note locking — broadcast to all OTHER clients (not sender)
   socket.on('noteLock',   ({op,by}) => { socket.broadcast.emit('noteLock',   {op,by}); });
   socket.on('noteUnlock', ()        => { socket.broadcast.emit('noteUnlock', {}); });
-  socket.on('dismissReadyPopup', ({op}) => { io.emit('readyPopupDismissed', {op}); });
   socket.on('disconnect', () => console.log('Disconnected:', socket.id));
 });
 

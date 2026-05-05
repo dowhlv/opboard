@@ -399,7 +399,6 @@ function TVDisplay() {
   const [providerColors, setProviderColors] = useState({});
   const [activeProviders, setActiveProviders] = useState(PROVIDERS); // synced from server // offline detection
   const [lastUpdated, setLastUpdated] = useState(new Date());
-  const [dismissedOps, setDismissedOps] = useState(new Set());
 
   useEffect(()=>{const id=setInterval(()=>setTick(t=>t+1),60000);return()=>clearInterval(id);},[]);
   const[now,setNow]=useState(new Date());
@@ -423,11 +422,10 @@ function TVDisplay() {
       setLastUpdated(new Date());
     };
     socket.on('state',onState);
-    socket.on('readyPopupDismissed',({op})=>{setDismissedOps(d=>new Set([...d,op]));});
     socket.emit('requestState');
     socket.on('connect',()=>{setIsOnline(true);setLastUpdated(new Date());});
     socket.on('disconnect',()=>{setIsOnline(false);setLastDisconnected(new Date());});
-    return()=>{socket.off('state',onState);socket.off('readyPopupDismissed');socket.off('connect');socket.off('disconnect');};  },[]);
+    return()=>{socket.off('state',onState);socket.off('connect');socket.off('disconnect');};  },[]);
 
   // Simulate offline toggle for preview — in production this uses socket connection events
   useEffect(()=>{
@@ -447,15 +445,7 @@ function TVDisplay() {
   const readyOps = ALL_OPS
     .filter(op => ops[op]?.status === "ready")
     .map(op => ({op, ts: ops[op].ts, type: "rdy"}));
-  const undismissedPopups = readyOps.filter(p => !dismissedOps.has(p.op));
-  const activePopup = undismissedPopups[0] || null;
-  // Auto-clear dismissed when status changes away from ready
-  useEffect(() => {
-    setDismissedOps(d => {
-      const next = new Set([...d].filter(op => ops[op]?.status === "ready"));
-      return next.size === d.size ? d : next;
-    });
-  }, [ops]);
+  const activePopup = readyOps[0] || null;
   const abbreviatedNotes=useMemo(()=>{
     const r={};
     ALL_OPS.forEach(op=>{r[op]=ops[op]?.note?abbreviateNote(ops[op].note,customAbbrevs):'';});
@@ -530,10 +520,10 @@ function TVDisplay() {
               </div>
             )}
             <div style={{flex:1}}/>
-            {undismissedPopups.length > 1 && (
+            {readyOps.length > 1 && (
               <div style={{fontFamily:"'Bebas Neue',sans-serif",fontSize:'14px',
                 color:'rgba(255,255,255,0.4)',letterSpacing:'0.1em',flexShrink:0}}>
-                +{undismissedPopups.length - 1} MORE
+                +{readyOps.length - 1} MORE
               </div>
             )}
           </div>
