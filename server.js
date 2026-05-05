@@ -96,24 +96,9 @@ const msUntilMidnight = new Date(now.getFullYear(),now.getMonth(),now.getDate()+
 setTimeout(()=>{ pruneHistory(); setInterval(pruneHistory, 24*60*60*1000); }, msUntilMidnight);
 
 let state = {
-  ops: {
-    1:  { status:'ready',    note:'New patient',    noteUpdatedAt:null,    ts: Number(Date.now()-120000),  apptTypes:['NP'],  provider:'Dr. Tang' },
-    2:  { status:'treatment',note:'Crown prep',     ts: Date.now()-840000,  apptTypes:['Tx'],  provider:'Dr. Tang' },
-    3:  { status:'dirty',    note:'',               ts: Date.now()-300000,  apptTypes:[],  provider:'Dr. Tang' },
-    4:  { status:'ready',    note:'X-rays done',    ts: Date.now()-60000,   apptTypes:['OV'],  provider:'Dr. Tang' },
-    5:  { status:'awaiting', note:'',               ts: Date.now()-150000,  apptTypes:[],  provider:'Dr. Tang' },
-    6:  { status:'dirty',    note:'',               ts: Date.now()-200000,  apptTypes:[],  provider:'Dr. Ngo'  },
-    7:  { status:'ready',    note:'',               ts: Date.now()-90000,   apptTypes:['OV'],  provider:'Dr. Ngo'  },
-    8:  { status:'treatment',note:'Implant consult',ts: Date.now()-1200000, apptTypes:['Tx'],  provider:'Dr. Ngo'  },
-    9:  { status:'awaiting', note:'',               ts: Date.now()-180000,  apptTypes:[],  provider:'Dr. Ngo'  },
-    10: { status:'pending',  note:'SRP Q2',         ts: Date.now()-360000,  apptTypes:['SRP'], provider:'Dr. Ngo'  },
-    11: { status:'treatment',note:'Root canal',     ts: Date.now()-2100000, apptTypes:['Tx'],  provider:'Jordan'   },
-    12: { status:'awaiting', note:'',               ts: Date.now()-30000,   apptTypes:['OV'],  provider:'Jordan'   },
-    13: { status:'awaiting', note:'',               ts: Date.now()-90000,   apptTypes:[],  provider:'Jordan'   },
-    14: { status:'fa',       note:'Whitening',      ts: Date.now()-600000,  apptTypes:['LOE'], provider:'Jordan'   },
-  },
+  ops: {},
   activeProviders:   ['Dr. Tang','Dr. Ngo','Jordan'],
-  inactiveProviders: ['OS','Endo','Perio'],
+  inactiveProviders: [],
   statuses: [
     {key:'ready',    label:'Ready',        abbr:'Ready',       numColor:'#4ade80',bg:'rgba(34,197,94,0.12)',  border:'rgba(34,197,94,0.45)',  glow:'0 0 28px rgba(74,222,128,0.35)', menuBg:'rgba(34,197,94,0.18)',  menuBorder:'rgba(34,197,94,0.6)',  menuHover:'rgba(34,197,94,0.28)' },
     {key:'treatment',label:'In Progress',  abbr:'In Progress', numColor:'#60a5fa',bg:'rgba(59,130,246,0.12)', border:'rgba(59,130,246,0.45)', glow:'0 0 28px rgba(96,165,250,0.35)', menuBg:'rgba(59,130,246,0.18)', menuBorder:'rgba(59,130,246,0.6)', menuHover:'rgba(59,130,246,0.28)'},
@@ -128,13 +113,11 @@ let state = {
   customAbbrevs: [], // [{full, abbr}] user-defined abbreviations
   providerDefaults: {
     'Dr. Tang':'show','Dr. Ngo':'show','Jordan':'show',
-    'OS':'hide','Endo':'hide','Perio':'hide',
   },
   providerColors: {
     'Dr. Tang':'#fff','Dr. Ngo':'#fff','Jordan':'#fff',
-    'OS':'#fff','Endo':'#fff','Perio':'#fff',
   },
-  allOps: Array.from({length:14},(_,i)=>({id:i+1,enabled:true})),
+  allOps: [],
   opPin: '0063', // Default op tablet PIN
 };
 loadState();

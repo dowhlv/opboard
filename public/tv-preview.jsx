@@ -388,8 +388,8 @@ function CornerNotification({popup, ops, onDismiss, onShowQueue, queueCount, pul
 }
 
 function TVDisplay() {
-  const [ops, setOps]   = useState(DEMO);
-  const [allOpsState, setAllOpsState] = useState(INIT_ALL_OPS);
+  const [ops, setOps]   = useState({});
+  const [allOpsState, setAllOpsState] = useState([]);
   const [antsOps, setAntsOps] = useState(new Set());
 
   const [,setTick]    = useState(0);
@@ -442,8 +442,7 @@ function TVDisplay() {
   const offlineMinutes=Math.floor((now-lastUpdated)/60000);
   // Queue is DERIVED from ops status — RDY ops only for TV
 
-  const providerCols = PROVIDERS.map(p=>({name:p,rooms:ALL_OPS.filter(op=>ops[op]?.provider===p)})).filter(p=>p.rooms.length>0);
-  const n = providerCols.length;
+    const providerCols = activeProviders.map(p=>({name:p,rooms:ALL_OPS.filter(op=>ops[op]?.provider===p)}));  const n = providerCols.length;
   // RDY popup derivation — banner triggers only on ready status
   const readyOps = ALL_OPS
     .filter(op => ops[op]?.status === "ready")

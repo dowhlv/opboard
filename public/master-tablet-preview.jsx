@@ -683,7 +683,7 @@ function FitText({text,maxSz,minSz=10,maxRows=3,color,fontFamily,fontWeight}){
 }
 
 function MasterTablet(){
-  const[ops,setOps]=useState(DEMO);
+  const[ops,setOps]=useState({});
   const[antsOps,setAntsOps]=useState(new Set());
   const[menu,setMenu]=useState(null);
   const[showAssign,setShowAssign]=useState(false);
@@ -699,6 +699,7 @@ function MasterTablet(){
   const[notifStyle,setNotifStyle]=useState('corner');
   const[customAbbrevs,setCustomAbbrevs]=useState([]);
   const[providerColors,setProviderColors]=useState({});
+  const [showQueue, setShowQueue] = useState(false);
   const[noteLocked,setNoteLocked]=useState(null);
   const[masterToast,setMasterToast]=useState(null);
   const masterToastRef=useRef(null);
@@ -732,7 +733,7 @@ function MasterTablet(){
   const[confirmTransfer,setConfirmTransfer]=useState(null);
   const[statuses,setStatuses]=useState(INIT_STATUSES);
   const[availableApptTypes,setAvailableApptTypes]=useState(INIT_APPT_TYPES);
-  const[allOpsState,setAllOpsState]=useState(INIT_ALL_OPS);
+  const[allOpsState,setAllOpsState]=useState([]);
   const cardRefs=useRef({});
   const[,setTick]=useState(0);
   const[now,setNow]=useState(new Date());
@@ -760,7 +761,7 @@ function MasterTablet(){
     };
     socket.on('state',onState);
     socket.emit('requestState');
-    return()=>{socket.off('state',onState);};
+    socket.off('state',onState);
   },[]);
   const SM=Object.fromEntries(statuses.map(s=>[s.key,s]));
   // emitSocket: safe wrapper — no-ops gracefully in preview where socket is undefined
@@ -768,6 +769,12 @@ function MasterTablet(){
     try{if(typeof socket!=='undefined')socket.emit(event,data);}catch(e){}
   },[]);
   const enabledOps=allOpsState.filter(o=>o.enabled).map(o=>o.id);
+  // RDY popup derivation — banner triggers only on ready status
+  const readyOps = enabledOps
+    .filter(op => ops[op]?.status === "ready")
+    .map(op => ({op, ts: ops[op].ts, type: "rdy"}));
+  const activePopup = readyOps[0] || null;
+  
   const fmtDate=d=>`${d.getMonth()+1}/${d.getDate()}/${d.getFullYear()}`;
   const fmtTime=d=>{let h=d.getHours(),m=d.getMinutes(),ap=h>=12?"PM":"AM";h=h%12||12;return`${h}:${String(m).padStart(2,"0")} ${ap}`;};
 
@@ -808,6 +815,47 @@ function MasterTablet(){
             {fmtDate(now)}<span style={{display:"inline-block",width:"28px"}}/>{fmtTime(now)}
           </div>
         </div>
+        {/* RDY Banner — shows at top when there are undismissed ready ops */}
+        {activePopup && !showQueue && (
+          <div style={{
+            flexShrink:0,
+            background:'rgba(74,222,128,0.18)',
+            borderTop:'2px solid #4ade80',
+            padding:'8px 20px',
+            display:'flex',alignItems:'center',gap:'16px',
+            animation:'rdyBannerPulse 2.5s ease-in-out infinite'
+          }}>
+            <div style={{fontFamily:"'Bebas Neue',sans-serif",fontSize:'22px',letterSpacing:'0.15em',
+              color:'#4ade80',flexShrink:0}}>
+              ✓ READY
+            </div>
+            <div style={{fontFamily:"'Bebas Neue',sans-serif",fontSize:'28px',letterSpacing:'0.1em',
+              color:'#fff',flexShrink:0}}>
+              OP {activePopup.op}
+            </div>
+            {activePopup.ts && (
+              <div style={{fontSize:'14px',fontWeight:700,color:'rgba(255,255,255,0.5)',flexShrink:0}}>
+                {Math.floor((Date.now()-new Date(activePopup.ts).getTime())/60000)}m
+              </div>
+            )}
+            <div style={{flex:1}}/>
+            {readyOps.length > 1 && (
+              <div style={{fontFamily:"'Bebas Neue',sans-serif",fontSize:'14px',
+                color:'rgba(255,255,255,0.4)',letterSpacing:'0.1em',flexShrink:0}}>
+                +{readyOps.length - 1} MORE
+              </div>
+            )}
+            
+            <button onMouseDown={e=>{e.stopPropagation();setShowQueue(true);}}
+              style={{flexShrink:0,padding:'6px 16px',borderRadius:'7px',cursor:'pointer',
+                background:'rgba(74,222,128,0.3)',
+                border:'1px solid #4ade80',
+                fontFamily:"'Bebas Neue',sans-serif",fontSize:'14px',letterSpacing:'0.1em',
+                color:'#fff'}}>
+              VIEW QUEUE
+            </button>
+          </div>
+        )}
 
         {/* Provider columns */}
         <div style={{...S.grid,gridTemplateColumns:`repeat(${n},minmax(0,1fr))`}}>
@@ -822,6 +870,11 @@ function MasterTablet(){
               <div key={name} style={S.col}>
                 <div style={{...S.provName,fontSize:namSz}}>{name}</div>
                 <div style={S.provDiv}/>
+                {rooms.length===0&&(
+                  <div style={{flex:1,display:"flex",alignItems:"center",justifyContent:"center",opacity:0.3}}>
+                    <div style={{fontFamily:"'Bebas Neue',sans-serif",fontSize:"clamp(16px,2vw,28px)",letterSpacing:"0.12em",color:"rgba(255,255,255,0.6)",textAlign:"center"}}>NO OPS ASSIGNED</div>
+                  </div>
+                )}
                 <div style={{...S.roomCol,display:"grid",gridTemplateRows:`repeat(${Math.max(rooms.length,3)},1fr)`}}>
                   {rooms.map(op=>{
                     if(!cardRefs.current[op]) cardRefs.current[op]=createRef();

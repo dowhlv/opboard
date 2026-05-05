@@ -356,8 +356,9 @@ function FitText({text,maxSz,minSz=10,maxRows=3,color,fontFamily,fontWeight}){
 }
 
 function FrontDeskTablet(){
-  const[ops,setOps]=useState(DEMO);
-  const [allOpsState, setAllOpsState] = useState(INIT_ALL_OPS);
+  const[ops,setOps]=useState({});
+  const [allOpsState, setAllOpsState] = useState([]);
+  const [activeProviders, setActiveProviders] = useState(PROVIDERS);
   const[antsOps,setAntsOps]=useState(new Set());
   const[dismissedOps,setDismissedOps]=useState(new Set());
   const[queueOrder,setQueueOrder]=useState([]);
@@ -396,7 +397,8 @@ function FrontDeskTablet(){
     if(typeof socket==='undefined') return;
     const onState=state=>{
       if(state.customAbbrevs) setCustomAbbrevs(state.customAbbrevs);
-if(state.allOps) setAllOpsState(state.allOps);
+
+      if(state.activeProviders) setActiveProviders(state.activeProviders);
       if(state.ops) setOps(prev=>{        const merged={...prev};
         Object.keys(state.ops).forEach(k=>{
           merged[k]={...state.ops[k],ts:state.ops[k].ts?new Date(state.ops[k].ts):null,noteUpdatedAt:state.ops[k].noteUpdatedAt||null};
@@ -562,7 +564,7 @@ const APPT_ABBR_MAP={"NP":"NP","CCX":"CCX","Treatment":"TX","LOE":"LOE","Deliver
     return () => clearInterval(id);
   },[ops, dismissedReminders]);
 
-  const providerCols=PROVIDERS.map(p=>({name:p,rooms:ALL_OPS.filter(op=>ops[op]?.provider===p)})).filter(p=>p.rooms.length>0);
+  const providerCols=activeProviders.map(p=>({name:p,rooms:ALL_OPS.filter(op=>ops[op]?.provider===p)}));
   const n=providerCols.length;
   const abbreviatedNotes=useMemo(()=>{
     const r={};
@@ -661,7 +663,7 @@ const APPT_ABBR_MAP={"NP":"NP","CCX":"CCX","Treatment":"TX","LOE":"LOE","Deliver
                 <div style={S.provDiv}/>
                 {rooms.length===0&&(
                   <div style={{flex:1,display:"flex",alignItems:"center",justifyContent:"center",opacity:0.3}}>
-                    <div style={{fontFamily:"'Bebas Neue',sans-serif",fontSize:numSz,color:"rgba(255,255,255,0.3)"}}>—</div>
+                    <div style={{fontFamily:"'Bebas Neue',sans-serif",fontSize:"clamp(16px,2vw,28px)",letterSpacing:"0.12em",color:"rgba(255,255,255,0.6)",textAlign:"center"}}>NO OPS ASSIGNED</div>
                   </div>
                 )}
                 <div style={{...S.roomCol,display:"grid",gridTemplateRows:`repeat(${Math.max(rooms.length,3)},1fr)`}}>
