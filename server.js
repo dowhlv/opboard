@@ -90,10 +90,27 @@ function pruneHistory() {
     }
   } catch(e) { console.error('Failed to prune history:', e.message); }
 }
+function dailyReset() {
+  try {
+    Object.keys(state.ops).forEach(k => {
+      const op = state.ops[k];
+      if (op.status === 'dirty') return;
+      op.provider = null;
+      op.status = 'awaiting';
+      op.apptTypes = [];
+      op.note = '';
+      op.ts = null;
+      op.noteUpdatedAt = null;
+    });
+    saveState();
+    broadcastState();
+    console.log('Daily reset complete:', new Date().toISOString());
+  } catch(e) { console.error('Failed daily reset:', e.message); }
+}
 // Schedule midnight pruning
 const now = new Date();
 const msUntilMidnight = new Date(now.getFullYear(),now.getMonth(),now.getDate()+1,0,1,0)-now;
-setTimeout(()=>{ pruneHistory(); setInterval(pruneHistory, 24*60*60*1000); }, msUntilMidnight);
+setTimeout(()=>{ pruneHistory(); dailyReset(); setInterval(()=>{pruneHistory();dailyReset();}, 24*60*60*1000); }, msUntilMidnight);
 
 let state = {
   ops: {},
