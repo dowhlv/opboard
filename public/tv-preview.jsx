@@ -427,6 +427,8 @@ function TVDisplay() {
   const [lastDisconnected, setLastDisconnected] = useState(null);
   const [customAbbrevs, setCustomAbbrevs] = useState([]);
   const [providerColors, setProviderColors] = useState({});
+  const [readyPopupDismissedState,setReadyPopupDismissedState]=useState({});
+  const [popupTick,setPopupTick]=useState(0);
   const [activeProviders, setActiveProviders] = useState(PROVIDERS); // synced from server // offline detection
   const [lastUpdated, setLastUpdated] = useState(new Date());
 
@@ -440,6 +442,7 @@ function TVDisplay() {
     const onState=state=>{
       if(state.customAbbrevs) setCustomAbbrevs(state.customAbbrevs);
       if(state.providerColors) setProviderColors(state.providerColors);
+      if(state.readyPopupDismissed) setReadyPopupDismissedState(state.readyPopupDismissed);
       if(state.activeProviders) setActiveProviders(state.activeProviders);
       if(state.allOps) setAllOpsState(state.allOps);
       if(state.ops) setOps(prev=>{
@@ -476,6 +479,16 @@ function TVDisplay() {
     .filter(op => ops[op]?.status === "ready")
     .map(op => ({op, ts: ops[op].ts, type: "rdy"}));
   const activePopup = readyOps[0] || null;
+  // Tick every 30s to re-evaluate popup queue
+  useEffect(()=>{const id=setInterval(()=>setPopupTick(t=>t+1),30000);return()=>clearInterval(id);},[]);
+  // Ready popup modal queue: ops not dismissed within last 5 min (read-only on TV)
+  const readyPopupQueue=readyOps.filter(p=>{
+    const d=readyPopupDismissedState[p.op];
+    return !d||(Date.now()-d>=5*60*1000);
+  });
+  // eslint-disable-next-line no-unused-vars
+  const _popupTickDep=popupTick;
+  const currentReadyPopup=readyPopupQueue[0]||null;
   const abbreviatedNotes=useMemo(()=>{
     const r={};
     ALL_OPS.forEach(op=>{r[op]=ops[op]?.note?abbreviateNote(ops[op].note,customAbbrevs):'';});
@@ -663,6 +676,14 @@ function TVDisplay() {
           </div>
         )}
       </div>
+        {currentReadyPopup && (
+          <div style={{position:"absolute",inset:0,background:"rgba(0,0,0,0.78)",backdropFilter:"blur(4px)",zIndex:900,display:"flex",alignItems:"center",justifyContent:"center"}}>
+            <div style={{padding:"60px 100px",borderRadius:"24px",background:"rgba(74,222,128,0.18)",border:"3px solid #4ade80",boxShadow:"0 0 80px rgba(74,222,128,0.6)",textAlign:"center",fontFamily:"'Bebas Neue',sans-serif",minWidth:"480px"}}>
+              <div style={{fontSize:"72px",letterSpacing:"0.15em",color:"#4ade80",lineHeight:1,marginBottom:"24px"}}>READY</div>
+              <div style={{fontSize:"96px",letterSpacing:"0.1em",color:"#fff",lineHeight:1}}>OP {currentReadyPopup.op}</div>
+            </div>
+          </div>
+        )}
     </ScaledWrapper>
   );
 }
