@@ -399,6 +399,7 @@ function TVDisplay() {
   const [providerColors, setProviderColors] = useState({});
   const [activeProviders, setActiveProviders] = useState(PROVIDERS); // synced from server // offline detection
   const [lastUpdated, setLastUpdated] = useState(new Date());
+  const [dismissedOps, setDismissedOps] = useState(new Set());
 
   useEffect(()=>{const id=setInterval(()=>setTick(t=>t+1),60000);return()=>clearInterval(id);},[]);
   const[now,setNow]=useState(new Date());
@@ -443,6 +444,19 @@ function TVDisplay() {
 
   const providerCols = PROVIDERS.map(p=>({name:p,rooms:ALL_OPS.filter(op=>ops[op]?.provider===p)})).filter(p=>p.rooms.length>0);
   const n = providerCols.length;
+  // RDY popup derivation — banner triggers only on ready status
+  const readyOps = ALL_OPS
+    .filter(op => ops[op]?.status === "ready")
+    .map(op => ({op, ts: ops[op].ts, type: "rdy"}));
+  const undismissedPopups = readyOps.filter(p => !dismissedOps.has(p.op));
+  const activePopup = undismissedPopups[0] || null;
+  // Auto-clear dismissed when status changes away from ready
+  useEffect(() => {
+    setDismissedOps(d => {
+      const next = new Set([...d].filter(op => ops[op]?.status === "ready"));
+      return next.size === d.size ? d : next;
+    });
+  }, [ops]);
   const abbreviatedNotes=useMemo(()=>{
     const r={};
     ALL_OPS.forEach(op=>{r[op]=ops[op]?.note?abbreviateNote(ops[op].note,customAbbrevs):'';});
@@ -493,6 +507,38 @@ function TVDisplay() {
 
 
 
+{/* RDY Banner — display-only, dismissed via Master Tablet */}
+        {activePopup && (
+          <div style={{
+            flexShrink:0,
+            background:'rgba(74,222,128,0.18)',
+            borderTop:'2px solid #4ade80',
+            padding:'8px 20px',
+            display:'flex',alignItems:'center',gap:'16px',
+            animation:'rdyBannerPulse 2.5s ease-in-out infinite'
+          }}>
+            <div style={{fontFamily:"'Bebas Neue',sans-serif",fontSize:'22px',letterSpacing:'0.15em',
+              color:'#4ade80',flexShrink:0}}>
+              ✓ READY
+            </div>
+            <div style={{fontFamily:"'Bebas Neue',sans-serif",fontSize:'28px',letterSpacing:'0.1em',
+              color:'#fff',flexShrink:0}}>
+              OP {activePopup.op}
+            </div>
+            {activePopup.ts && (
+              <div style={{fontSize:'14px',fontWeight:700,color:'rgba(255,255,255,0.5)',flexShrink:0}}>
+                {Math.floor((Date.now()-new Date(activePopup.ts).getTime())/60000)}m
+              </div>
+            )}
+            <div style={{flex:1}}/>
+            {undismissedPopups.length > 1 && (
+              <div style={{fontFamily:"'Bebas Neue',sans-serif",fontSize:'14px',
+                color:'rgba(255,255,255,0.4)',letterSpacing:'0.1em',flexShrink:0}}>
+                +{undismissedPopups.length - 1} MORE
+              </div>
+            )}
+          </div>
+        )}
         {/* ── Provider columns ── */}
         <div style={{...S.providerGrid, gridTemplateColumns:`repeat(${n},1fr)`}}>
           {providerCols.map(({name,rooms},ci)=>{
