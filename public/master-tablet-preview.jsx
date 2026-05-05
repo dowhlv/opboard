@@ -827,7 +827,7 @@ function MasterTablet(){
           }}>
             <div style={{fontFamily:"'Bebas Neue',sans-serif",fontSize:'22px',letterSpacing:'0.15em',
               color:'#4ade80',flexShrink:0}}>
-              ✓ READY
+              ⚠ READY
             </div>
             <div style={{fontFamily:"'Bebas Neue',sans-serif",fontSize:'28px',letterSpacing:'0.1em',
               color:'#fff',flexShrink:0}}>
