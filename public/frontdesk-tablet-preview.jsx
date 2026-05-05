@@ -384,7 +384,6 @@ function FrontDeskTablet(){
   const[notifStyle,setNotifStyle]=useState('corner'); // 'corner'|'topbar'|'cardonly'|'firstonly' // {op, status, elapsed} for 10-min warning
   const[dismissedReminders,setDismissedReminders]=useState(new Set()); // {op-status-ts} keys
   const soundTimer=useRef(null);
-  const prevOpsRef=useRef({});
   const toastRef=useRef(null);
 
   const showToast=msg=>{setToast(msg);clearTimeout(toastRef.current);toastRef.current=setTimeout(()=>setToast(null),2000);};
