@@ -153,7 +153,7 @@ io.on('connection', socket => {
   socket.on('setStatus',   ({op,status})   => { if(state.ops[op]){ state.ops[op].status=status; state.ops[op].ts=Number(Date.now()); if(['awaiting','inactive'].includes(status)){state.ops[op].apptTypes=[];state.ops[op].note='';} logHistory(op,status,state.ops[op].apptTypes,state.ops[op].provider); saveState(); } io.emit('state',{...state,ops:Object.fromEntries(Object.entries(state.ops).map(([k,v])=>[ k,{...v,ts:v.ts?Number(v.ts):null}]))}); });
   socket.on('setApptType', ({op,apptTypes}) => { if(state.ops[op]){ state.ops[op].apptTypes=Array.isArray(apptTypes)?apptTypes:[]; saveState(); } broadcastState(); });
   socket.on('setNote',     ({op,note})     => { if(state.ops[op]){ state.ops[op].note=note; state.ops[op].noteUpdatedAt=Date.now(); saveState(); } broadcastState(); });
-  socket.on('setProviders',({activeProviders,inactiveProviders}) => { state.activeProviders=activeProviders; state.inactiveProviders=inactiveProviders; broadcastState(); });
+  socket.on('setProviders',({activeProviders,inactiveProviders}) => { state.activeProviders=activeProviders; state.inactiveProviders=inactiveProviders; saveState(); broadcastState(); });
   socket.on('setOpProvider',({op,provider,status,apptTypes,note}) => {
     if(!state.ops[op]) state.ops[op]={provider:null,status:'awaiting',apptTypes:[],note:'',ts:null,noteUpdatedAt:null};
     state.ops[op].provider=provider;

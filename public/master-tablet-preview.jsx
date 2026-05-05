@@ -571,7 +571,7 @@ function MasterMenu({ statuses, setStatuses, apptTypes, setApptTypes, allOps, se
           <div style={{fontSize:"12px",color:"rgba(255,255,255,0.35)",marginBottom:"16px"}}>Drag ↕ to reorder · Click Edit to rename · ✕ to remove</div>
 
           <div style={{fontSize:"11px",letterSpacing:"0.16em",color:"rgba(255,255,255,0.35)",fontWeight:600,marginBottom:"10px"}}>ACTIVE</div>
-          <EditableList items={providers} setItems={setProviders} showColor={false}/>
+          <EditableList items={providers} setItems={(next)=>{const arr=typeof next==="function"?next(providers):next;setProviders(arr);emitSocket("setProviders",{activeProviders:arr,inactiveProviders});}} showColor={false}/>
 
           <div style={{height:"2px",background:"rgba(255,255,255,0.12)",margin:"18px 0 14px"}}/>
 
