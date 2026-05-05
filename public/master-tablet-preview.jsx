@@ -701,6 +701,8 @@ function MasterTablet(){
   const[customAbbrevs,setCustomAbbrevs]=useState([]);
   const[providerColors,setProviderColors]=useState({});
   const [showQueue, setShowQueue] = useState(false);
+  const [readyPopupDismissedState,setReadyPopupDismissedState]=useState({});
+  const [popupTick,setPopupTick]=useState(0);
   const[noteLocked,setNoteLocked]=useState(null);
   const[masterToast,setMasterToast]=useState(null);
   const masterToastRef=useRef(null);
@@ -752,6 +754,7 @@ function MasterTablet(){
       if(state.apptTypes) setAvailableApptTypes(state.apptTypes);
       if(state.customAbbrevs) setCustomAbbrevs(state.customAbbrevs);
       if(state.providerColors) setProviderColors(state.providerColors);
+      if(state.readyPopupDismissed) setReadyPopupDismissedState(state.readyPopupDismissed);
       if(state.ops) setOps(prev=>{
         const merged={...prev};
         Object.keys(state.ops).forEach(k=>{
@@ -775,6 +778,28 @@ function MasterTablet(){
     .filter(op => ops[op]?.status === "ready")
     .map(op => ({op, ts: ops[op].ts, type: "rdy"}));
   const activePopup = readyOps[0] || null;
+  // Tick every 30s to re-evaluate popup queue
+  useEffect(()=>{const id=setInterval(()=>setPopupTick(t=>t+1),30000);return()=>clearInterval(id);},[]);
+  // Ready popup modal queue: ops not dismissed within last 5 min
+  const readyPopupQueue=readyOps.filter(p=>{
+    const d=readyPopupDismissedState[p.op];
+    return !d||(Date.now()-d>=5*60*1000);
+  });
+  // eslint-disable-next-line no-unused-vars
+  const _popupTickDep=popupTick;
+  const currentReadyPopup=readyPopupQueue[0]||null;
+  const dismissReadyPopup=()=>{
+    if(!currentReadyPopup)return;
+    emitSocket('dismissReadyPopup',{op:currentReadyPopup.op});
+  };
+  // Clear dismissal when op leaves ready (server-side)
+  useEffect(()=>{
+    Object.keys(readyPopupDismissedState).forEach(op=>{
+      if(ops[op]?.status!=='ready'){
+        emitSocket('clearReadyPopupDismissed',{op:Number(op)});
+      }
+    });
+  },[ops]);
   
   const fmtDate=d=>`${d.getMonth()+1}/${d.getDate()}/${d.getFullYear()}`;
   const fmtTime=d=>{let h=d.getHours(),m=d.getMinutes(),ap=h>=12?"PM":"AM";h=h%12||12;return`${h}:${String(m).padStart(2,"0")} ${ap}`;};
@@ -1316,6 +1341,16 @@ const opData=pendingAssignOps?.[op]||ops[op];
           </div>
         )}
       </div>
+        {currentReadyPopup && (
+          <div onMouseDown={dismissReadyPopup}
+            style={{position:"absolute",inset:0,background:"rgba(0,0,0,0.78)",backdropFilter:"blur(4px)",zIndex:900,display:"flex",alignItems:"center",justifyContent:"center",cursor:"pointer"}}>
+            <div style={{padding:"60px 100px",borderRadius:"24px",background:"rgba(74,222,128,0.18)",border:"3px solid #4ade80",boxShadow:"0 0 80px rgba(74,222,128,0.6)",textAlign:"center",fontFamily:"'Bebas Neue',sans-serif",minWidth:"480px"}}>
+              <div style={{fontSize:"72px",letterSpacing:"0.15em",color:"#4ade80",lineHeight:1,marginBottom:"24px"}}>READY</div>
+              <div style={{fontSize:"96px",letterSpacing:"0.1em",color:"#fff",lineHeight:1,marginBottom:"32px"}}>OP {currentReadyPopup.op}</div>
+              <div style={{fontSize:"22px",letterSpacing:"0.2em",color:"rgba(255,255,255,0.55)",fontFamily:"'DM Sans',sans-serif",fontWeight:600}}>TAP TO DISMISS</div>
+            </div>
+          </div>
+        )}
     </ScaledWrapper>
   );
 }

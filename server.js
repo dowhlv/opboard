@@ -135,6 +135,7 @@ let state = {
     'Dr. Tang':'#fff','Dr. Ngo':'#fff','Jordan':'#fff',
   },
   allOps: Array.from({length:14},(_,i)=>({id:i+1,enabled:true})),
+  readyPopupDismissed: {},
   opPin: '0063', // Default op tablet PIN
 };
 loadState();
@@ -193,6 +194,8 @@ io.on('connection', socket => {
   // Note locking — broadcast to all OTHER clients (not sender)
   socket.on('noteLock',   ({op,by}) => { socket.broadcast.emit('noteLock',   {op,by}); });
   socket.on('noteUnlock', ()        => { socket.broadcast.emit('noteUnlock', {}); });
+  socket.on('dismissReadyPopup', ({op}) => { state.readyPopupDismissed[op]=Date.now(); broadcastState(); });
+  socket.on('clearReadyPopupDismissed', ({op}) => { delete state.readyPopupDismissed[op]; broadcastState(); });
   socket.on('disconnect', () => console.log('Disconnected:', socket.id));
 });
 
