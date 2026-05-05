@@ -761,7 +761,7 @@ function MasterTablet(){
     };
     socket.on('state',onState);
     socket.emit('requestState');
-    socket.off('state',onState);
+    return () => socket.off('state',onState);
   },[]);
   const SM=Object.fromEntries(statuses.map(s=>[s.key,s]));
   // emitSocket: safe wrapper — no-ops gracefully in preview where socket is undefined

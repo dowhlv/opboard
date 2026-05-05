@@ -117,7 +117,7 @@ let state = {
   providerColors: {
     'Dr. Tang':'#fff','Dr. Ngo':'#fff','Jordan':'#fff',
   },
-  allOps: [],
+  allOps: Array.from({length:14},(_,i)=>({id:i+1,enabled:true})),
   opPin: '0063', // Default op tablet PIN
 };
 loadState();
