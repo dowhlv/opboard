@@ -423,11 +423,11 @@ function TVDisplay() {
       setLastUpdated(new Date());
     };
     socket.on('state',onState);
+    socket.on('readyPopupDismissed',({op})=>{setDismissedOps(d=>new Set([...d,op]));});
     socket.emit('requestState');
     socket.on('connect',()=>{setIsOnline(true);setLastUpdated(new Date());});
     socket.on('disconnect',()=>{setIsOnline(false);setLastDisconnected(new Date());});
-    return()=>{socket.off('state',onState);socket.off('connect');socket.off('disconnect');};
-  },[]);
+    return()=>{socket.off('state',onState);socket.off('readyPopupDismissed');socket.off('connect');socket.off('disconnect');};  },[]);
 
   // Simulate offline toggle for preview — in production this uses socket connection events
   useEffect(()=>{
