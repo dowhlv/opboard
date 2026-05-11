@@ -107,11 +107,17 @@ function dailyReset() {
     console.log('Daily reset complete:', new Date().toISOString());
   } catch(e) { console.error('Failed daily reset:', e.message); }
 }
-// Schedule midnight pruning
-const now = new Date();
-const msUntilMidnight = new Date(now.getFullYear(),now.getMonth(),now.getDate()+1,0,1,0)-now;
-setTimeout(()=>{ pruneHistory(); dailyReset(); setInterval(()=>{pruneHistory();dailyReset();}, 24*60*60*1000); }, msUntilMidnight);
-
+// Schedule daily reset at 00:01, recomputed each iteration to prevent drift
+function scheduleNextDailyReset() {
+  const now = new Date();
+  const next = new Date(now.getFullYear(), now.getMonth(), now.getDate()+1, 0, 1, 0);
+  setTimeout(() => {
+    pruneHistory();
+    dailyReset();
+    scheduleNextDailyReset();
+  }, next - now);
+}
+scheduleNextDailyReset();
 let state = {
   ops: {},
   activeProviders:   ['Dr. Tang','Dr. Ngo','Jordan'],
