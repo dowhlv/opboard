@@ -232,14 +232,17 @@ function HistoryModal({ ops, statuses, allOps, onClose }) {
 
 // Queue Item — drag to reorder only, no swipe dismiss
 // Items only leave queue when status changes
-function QueueItem({item,ops,onDragStart,onDragEnter,isDragging}){
+function QueueItem({item,ops,onDragStart,onDragEnter,onTouchHoldStart,onTouchHoldMove,onTouchHoldEnd,isDragging}){
   const{op,type}=item;
   const cfg=type==="awfa"?SM.pending:SM.ready;
   return(
-    <div onDragEnter={()=>onDragEnter(item.id)}
+    <div data-queue-item-id={item.id} onDragEnter={()=>onDragEnter(item.id)} onDragOver={e=>e.preventDefault()}
       style={{position:"relative",borderRadius:"10px",border:`2px solid ${cfg.numColor}`,background:cfg.bg,marginBottom:"8px",opacity:isDragging?0.5:1,userSelect:"none"}}>
       <div style={{display:"flex",alignItems:"center",padding:"10px 16px",gap:"12px"}}>
-        <div draggable onDragStart={e=>{e.stopPropagation();onDragStart(item.id);}}
+        <div draggable onDragStart={e=>{e.stopPropagation();onDragStart(item.id);}} onDragOver={e=>e.preventDefault()}
+          onTouchStart={e=>onTouchHoldStart(item.id,e)}
+          onTouchMove={e=>onTouchHoldMove(e)}
+          onTouchEnd={e=>onTouchHoldEnd(e)}
           style={{fontSize:"18px",color:cfg.numColor,cursor:"grab",flexShrink:0,padding:"3px 5px",borderRadius:"4px"}}
           title="Drag to reorder">↕</div>
         <div style={{display:"flex",flex:1,alignItems:"center",gap:"8px"}}>
@@ -535,7 +538,63 @@ const APPT_ABBR_MAP={"NP":"NP","CCX":"CCX","Treatment":"TX","LOE":"LOE","Deliver
   },[popups.length]);
 
 
-  const handleDragEnd=()=>{setDragId(null);setDragOverId(null);};
+  const touchHoldTimer=useRef(null);
+  const touchActiveRef=useRef(false);
+  const [touchPos,setTouchPos]=useState(null);
+  const grabOffset=useRef({x:180,y:30});
+  const onTouchHoldStart=(id,e)=>{
+    e.stopPropagation();
+    const t=e.touches[0];
+    const rect=e.currentTarget.getBoundingClientRect();
+    grabOffset.current={x:t.clientX-rect.left,y:t.clientY-rect.top};
+    const startX=t.clientX, startY=t.clientY;
+    if(touchHoldTimer.current)clearTimeout(touchHoldTimer.current);
+    touchHoldTimer.current=setTimeout(()=>{
+      setDragId(id);
+      setTouchPos({x:startX,y:startY});
+      touchActiveRef.current=true;
+      if(navigator.vibrate)navigator.vibrate(40);
+    },400);
+  };
+  const onTouchHoldMove=(e)=>{
+    if(!touchActiveRef.current){
+      if(touchHoldTimer.current){clearTimeout(touchHoldTimer.current);touchHoldTimer.current=null;}
+      return;
+    }
+    e.preventDefault();
+    const t=e.touches[0];
+    const rect=e.currentTarget.getBoundingClientRect();
+    grabOffset.current={x:t.clientX-rect.left,y:t.clientY-rect.top};
+    setTouchPos({x:t.clientX,y:t.clientY});
+    const el=document.elementFromPoint(t.clientX,t.clientY);
+    const item=el?.closest("[data-queue-item-id]");
+    if(item){
+      const id=parseInt(item.getAttribute("data-queue-item-id"));
+      if(!isNaN(id))setDragOverId(id);
+    }
+  };
+  const onTouchHoldEnd=(e)=>{
+    if(touchHoldTimer.current){clearTimeout(touchHoldTimer.current);touchHoldTimer.current=null;}
+    if(touchActiveRef.current){
+      touchActiveRef.current=false;
+      setTouchPos(null);
+      handleDragEnd();
+    }
+  };
+  const handleDragEnd=()=>{
+    if(dragId!==null && dragOverId!==null && dragId!==dragOverId){
+      setQueueOrder(prev=>{
+        const arr=[...prev];
+        const fromIdx=arr.indexOf(dragId);
+        const toIdx=arr.indexOf(dragOverId);
+        if(fromIdx<0||toIdx<0)return prev;
+        const[moved]=arr.splice(fromIdx,1);
+        arr.splice(toIdx,0,moved);
+        return arr;
+      });
+    }
+    setDragId(null);setDragOverId(null);
+  };
 
   const[isOnline,setIsOnline]=useState(true);
   const[lastUpdated,setLastUpdated]=useState(new Date());
@@ -880,7 +939,7 @@ const APPT_ABBR_MAP={"NP":"NP","CCX":"CCX","Treatment":"TX","LOE":"LOE","Deliver
 
         {/* Queue screen */}
         {showQueue&&(
-          <div style={{position:"absolute",inset:0,background:"rgba(8,10,12,0.97)",zIndex:350,display:"flex",flexDirection:"column",padding:"24px 32px",gap:"12px"}} onDragEnd={handleDragEnd}>
+          <div style={{position:"absolute",inset:0,background:"rgba(8,10,12,0.97)",zIndex:350,display:"flex",flexDirection:"column",padding:"24px 32px",gap:"12px"}} onDragEnd={handleDragEnd} onDragOver={e=>e.preventDefault()}>
             <div style={{display:"flex",alignItems:"center",justifyContent:"space-between",marginBottom:"6px"}}>
               <div style={{fontFamily:"'Bebas Neue',sans-serif",fontSize:"32px",letterSpacing:"0.15em",color:popups[0]?.type==="awfa"?"#ff69b4":"#4ade80"}}>
               {popups[0]?.type==="awfa"?"AWAITING FA":"READY"} QUEUE
@@ -890,7 +949,7 @@ const APPT_ABBR_MAP={"NP":"NP","CCX":"CCX","Treatment":"TX","LOE":"LOE","Deliver
             <div style={{fontSize:"11px",letterSpacing:"0.1em",color:"rgba(255,255,255,0.3)",fontFamily:"'DM Sans',sans-serif",marginBottom:"4px"}}>DRAG ↕ TO REORDER URGENCY · STATUS CHANGE REMOVES FROM QUEUE</div>
             <div style={{flex:1,overflowY:"auto"}}>
               {popups.map(item=>(
-                <QueueItem key={item.id} item={item} ops={ops} onDragStart={id=>{setDragId(id);}} onDragEnter={id=>{setDragOverId(id);}} isDragging={dragId===item.id}/>
+                <QueueItem key={item.id} item={item} ops={ops} onDragStart={id=>{setDragId(id);}} onDragEnter={id=>{setDragOverId(id);}} onTouchHoldStart={onTouchHoldStart} onTouchHoldMove={onTouchHoldMove} onTouchHoldEnd={onTouchHoldEnd} isDragging={dragId===item.id}/>
               ))}
             </div>
           </div>
@@ -906,6 +965,19 @@ const APPT_ABBR_MAP={"NP":"NP","CCX":"CCX","Treatment":"TX","LOE":"LOE","Deliver
             </div>
           </div>
         )}
+        {dragId!==null && touchPos && (()=>{
+          const draggedItem=popups.find(p=>p.id===dragId);
+          if(!draggedItem)return null;
+          const cfg=draggedItem.type==="awfa"?SM.pending:SM.ready;
+          return (
+            <div style={{position:"fixed",left:touchPos.x-grabOffset.current.x,top:touchPos.y-grabOffset.current.y,pointerEvents:"none",zIndex:1000,opacity:0.9,width:"360px"}}>
+              <div style={{borderRadius:"10px",border:`2px solid ${cfg.numColor}`,background:cfg.bg,boxShadow:`0 16px 40px ${cfg.numColor}99, 0 0 32px ${cfg.numColor}aa`,padding:"10px 16px",display:"flex",alignItems:"center",gap:"12px"}}>
+                <div style={{fontFamily:"'Bebas Neue',sans-serif",fontSize:"36px",lineHeight:1,color:cfg.numColor}}>Op {draggedItem.op}</div>
+                <div style={{fontFamily:"'Bebas Neue',sans-serif",fontSize:"18px",color:cfg.numColor,opacity:0.8,letterSpacing:"0.1em"}}>{draggedItem.type==="awfa"?"AWAITING FA":"READY"}</div>
+              </div>
+            </div>
+          );
+        })()}
     </ScaledWrapper>
   );
 }

@@ -703,6 +703,11 @@ function MasterTablet(){
   const [showQueue, setShowQueue] = useState(false);
   const [readyPopupDismissedState,setReadyPopupDismissedState]=useState({});
   const [popupTick,setPopupTick]=useState(0);
+  const [dragId,setDragId]=useState(null);
+  const [touchPos,setTouchPos]=useState(null);
+  const grabOffset=useRef({x:180,y:30});
+  const [dragOverId,setDragOverId]=useState(null);
+  const [queueOrder,setQueueOrder]=useState([]);
   const[noteLocked,setNoteLocked]=useState(null);
   const[masterToast,setMasterToast]=useState(null);
   const masterToastRef=useRef(null);
@@ -775,8 +780,26 @@ function MasterTablet(){
   const enabledOps=allOpsState.filter(o=>o.enabled).map(o=>o.id);
   // RDY popup derivation — banner triggers only on ready status
   const readyOps = enabledOps
-    .filter(op => ops[op]?.status === "ready")
-    .map(op => ({op, ts: ops[op].ts, type: "rdy"}));
+    .filter(op=>ops[op]?.provider&&ops[op]?.status==='ready')
+    .map(op=>({op,ts:ops[op].ts}))
+    .sort((a,b)=>{
+      const ai=queueOrder.indexOf(a.op), bi=queueOrder.indexOf(b.op);
+      if(ai>=0&&bi>=0)return ai-bi;
+      if(ai>=0)return -1;
+      if(bi>=0)return 1;
+      return (a.ts?new Date(a.ts):0)-(b.ts?new Date(b.ts):0);
+    });
+  // Sync queueOrder: add new ops at end, remove departed ops
+  useEffect(()=>{
+    setQueueOrder(prev=>{
+      const currentOps=readyOps.map(r=>r.op);
+      const current=new Set(currentOps);
+      const filtered=prev.filter(op=>current.has(op));
+      const newOps=currentOps.filter(op=>!prev.includes(op));
+      return [...filtered,...newOps];
+    });
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  },[readyOps.length, readyOps.map(r=>r.op).join('-')]);
   const activePopup = readyOps[0] || null;
   // Tick every 30s to re-evaluate popup queue
   useEffect(()=>{const id=setInterval(()=>setPopupTick(t=>t+1),30000);return()=>clearInterval(id);},[]);
@@ -788,6 +811,58 @@ function MasterTablet(){
   // eslint-disable-next-line no-unused-vars
   const _popupTickDep=popupTick;
   const currentReadyPopup=readyPopupQueue[0]||null;
+  const touchHoldTimer=useRef(null);
+  const touchActiveRef=useRef(false);
+  const onTouchHoldStart=(id,e)=>{
+    const t0=e.touches[0];
+    const startX=t0.clientX, startY=t0.clientY;
+    const rect=e.currentTarget.getBoundingClientRect();
+    grabOffset.current={x:t0.clientX-rect.left,y:t0.clientY-rect.top};
+    e.stopPropagation();
+    if(touchHoldTimer.current)clearTimeout(touchHoldTimer.current);
+    touchHoldTimer.current=setTimeout(()=>{
+      setDragId(id);
+      setTouchPos({x:startX,y:startY});
+      touchActiveRef.current=true;
+      if(navigator.vibrate)navigator.vibrate(40);
+    },400);
+  };
+  const onTouchHoldMove=(e)=>{
+    if(!touchActiveRef.current){
+      if(touchHoldTimer.current){clearTimeout(touchHoldTimer.current);touchHoldTimer.current=null;}
+      return;
+    }
+    const t=e.touches[0];
+    setTouchPos({x:t.clientX,y:t.clientY});
+    const el=document.elementFromPoint(t.clientX,t.clientY);
+    const item=el?.closest('[data-queue-item-id]');
+    if(item){
+      const id=parseInt(item.getAttribute('data-queue-item-id'));
+      if(!isNaN(id))setDragOverId(id);
+    }
+  };
+  const handleQueueDragEnd=()=>{
+    if(dragId!==null && dragOverId!==null && dragId!==dragOverId){
+      setQueueOrder(prev=>{
+        const arr=[...prev];
+        const fromIdx=arr.indexOf(dragId);
+        const toIdx=arr.indexOf(dragOverId);
+        if(fromIdx<0||toIdx<0)return prev;
+        const[moved]=arr.splice(fromIdx,1);
+        arr.splice(toIdx,0,moved);
+        return arr;
+      });
+    }
+    setDragId(null);setDragOverId(null);
+  };
+  const onTouchHoldEnd=(e)=>{
+    if(touchHoldTimer.current){clearTimeout(touchHoldTimer.current);touchHoldTimer.current=null;}
+    if(touchActiveRef.current){
+      touchActiveRef.current=false;
+      setTouchPos(null);
+      handleQueueDragEnd();
+    }
+  };
   const dismissReadyPopup=()=>{
     if(!currentReadyPopup)return;
     emitSocket('dismissReadyPopup',{op:currentReadyPopup.op});
@@ -1331,7 +1406,17 @@ const opData=pendingAssignOps?.[op]||ops[op];
             <div style={{flex:1,overflowY:"auto",display:"flex",flexDirection:"column",gap:"8px"}}>
               {readyOps.length===0 && (<div style={{textAlign:"center",color:"rgba(255,255,255,0.4)",fontFamily:"'DM Sans',sans-serif",padding:"40px"}}>No ops ready</div>)}
               {readyOps.map(item=>(
-                <div key={item.op} style={{padding:"16px 20px",background:"rgba(74,222,128,0.08)",border:"1px solid rgba(74,222,128,0.3)",borderRadius:"10px",display:"flex",alignItems:"center",gap:"20px"}}>
+                <div key={item.op} data-queue-item-id={item.op}
+                  onDragEnter={()=>setDragOverId(item.op)} onDragOver={e=>e.preventDefault()}
+                  style={{padding:"16px 20px",background:"rgba(74,222,128,0.08)",border:"1px solid rgba(74,222,128,0.3)",borderRadius:"10px",display:"flex",alignItems:"center",gap:"20px",opacity:dragId===item.op?0.5:1,userSelect:"none"}}>
+                  <div draggable
+                    onDragStart={e=>{e.stopPropagation();setDragId(item.op);}}
+                    onDragEnd={handleQueueDragEnd}
+                    onTouchStart={e=>onTouchHoldStart(item.op,e)}
+                    onTouchMove={e=>onTouchHoldMove(e)}
+                    onTouchEnd={e=>onTouchHoldEnd(e)}
+                    style={{fontSize:"22px",color:"#4ade80",cursor:"grab",touchAction:"none",flexShrink:0,padding:"3px 8px",borderRadius:"4px"}}
+                    title="Drag to reorder">↕</div>
                   <div style={{fontFamily:"'Bebas Neue',sans-serif",fontSize:"36px",color:"#4ade80",letterSpacing:"0.05em",minWidth:"60px"}}>OP {item.op}</div>
                   <div style={{flex:1,fontFamily:"'DM Sans',sans-serif",fontSize:"16px",color:"#fff"}}>{ops[item.op]?.provider||""}</div>
                   {item.ts && (<div style={{fontSize:"14px",color:"rgba(255,255,255,0.5)",fontFamily:"'Bebas Neue',sans-serif",letterSpacing:"0.1em"}}>{Math.floor((Date.now()-new Date(item.ts).getTime())/60000)}m</div>)}
@@ -1351,6 +1436,18 @@ const opData=pendingAssignOps?.[op]||ops[op];
             </div>
           </div>
         )}
+        {dragId!==null && touchPos && (()=>{
+          const draggedItem=readyOps.find(o=>o.op===dragId);
+          if(!draggedItem)return null;
+          return (
+            <div style={{position:"fixed",left:touchPos.x-grabOffset.current.x,top:touchPos.y-grabOffset.current.y,pointerEvents:"none",zIndex:1000,opacity:0.9,width:"360px"}}>
+              <div style={{borderRadius:"10px",border:"2px solid #4ade80",background:"rgba(74,222,128,0.15)",boxShadow:"0 16px 40px rgba(74,222,128,0.6), 0 0 32px rgba(74,222,128,0.7)",padding:"10px 16px",display:"flex",alignItems:"center",gap:"12px"}}>
+                <div style={{fontFamily:"'Bebas Neue',sans-serif",fontSize:"36px",lineHeight:1,color:"#4ade80"}}>Op {draggedItem.op}</div>
+                <div style={{fontFamily:"'DM Sans',sans-serif",fontSize:"16px",color:"#fff",flex:1,minWidth:0,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>{ops[draggedItem.op]?.provider||""}</div>
+              </div>
+            </div>
+          );
+        })()}
     </ScaledWrapper>
   );
 }
