@@ -1402,7 +1402,7 @@ const opData=pendingAssignOps?.[op]||ops[op];
               <div style={{fontFamily:"'Bebas Neue',sans-serif",fontSize:"32px",letterSpacing:"0.15em",color:"#4ade80"}}>READY QUEUE</div>
               <button onClick={()=>setShowQueue(false)} style={{fontFamily:"'Bebas Neue',sans-serif",fontSize:"16px",letterSpacing:"0.12em",padding:"8px 20px",borderRadius:"7px",background:"rgba(255,255,255,0.07)",border:"1px solid rgba(255,255,255,0.2)",color:"rgba(255,255,255,0.7)",cursor:"pointer"}}>BACK</button>
             </div>
-            <div style={{fontSize:"11px",letterSpacing:"0.1em",color:"rgba(255,255,255,0.3)",fontFamily:"'DM Sans',sans-serif",marginBottom:"4px"}}>STATUS CHANGE REMOVES FROM QUEUE</div>
+            <div style={{fontSize:"11px",letterSpacing:"0.1em",color:"rgba(255,255,255,0.3)",fontFamily:"'DM Sans',sans-serif",marginBottom:"4px"}}>STATUS CHANGE REMOVES OP FROM QUEUE</div>
             <div style={{flex:1,overflowY:"auto",display:"flex",flexDirection:"column",gap:"8px"}}>
               {readyOps.length===0 && (<div style={{textAlign:"center",color:"rgba(255,255,255,0.4)",fontFamily:"'DM Sans',sans-serif",padding:"40px"}}>No ops ready</div>)}
               {readyOps.map(item=>(

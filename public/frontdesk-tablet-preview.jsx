@@ -946,7 +946,7 @@ const APPT_ABBR_MAP={"NP":"NP","CCX":"CCX","Treatment":"TX","LOE":"LOE","Deliver
             </div>
               <button onClick={()=>setShowQueue(false)} style={{fontFamily:"'Bebas Neue',sans-serif",fontSize:"16px",letterSpacing:"0.12em",padding:"8px 20px",borderRadius:"7px",background:"rgba(255,255,255,0.07)",border:"1px solid rgba(255,255,255,0.2)",color:"rgba(255,255,255,0.7)",cursor:"pointer"}}>← BACK</button>
             </div>
-            <div style={{fontSize:"11px",letterSpacing:"0.1em",color:"rgba(255,255,255,0.3)",fontFamily:"'DM Sans',sans-serif",marginBottom:"4px"}}>DRAG ↕ TO REORDER URGENCY · STATUS CHANGE REMOVES FROM QUEUE</div>
+            <div style={{fontSize:"11px",letterSpacing:"0.1em",color:"rgba(255,255,255,0.3)",fontFamily:"'DM Sans',sans-serif",marginBottom:"4px"}}>DRAG ↕ TO REORDER URGENCY · STATUS CHANGE REMOVES OP FROM QUEUE</div>
             <div style={{flex:1,overflowY:"auto"}}>
               {popups.map(item=>(
                 <QueueItem key={item.id} item={item} ops={ops} onDragStart={id=>{setDragId(id);}} onDragEnter={id=>{setDragOverId(id);}} onTouchHoldStart={onTouchHoldStart} onTouchHoldMove={onTouchHoldMove} onTouchHoldEnd={onTouchHoldEnd} isDragging={dragId===item.id}/>
