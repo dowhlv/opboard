@@ -73,8 +73,8 @@ const STATUSES=[
   {key:"inactive", abbr:"Not In Use",  numColor:"#555",   bg:"rgba(80,80,80,0.15)",   border:"rgba(80,80,80,0.3)"},
 ];
 const SM=Object.fromEntries(STATUSES.map(s=>[s.key,s]));
-const DEFAULT_APPT_TYPES=["NP","CCX","Treatment","LOE","Delivery","Office Visit","Prophy","PMT","SRP"];
-const APPT_ABBR_MAP={"NP":"NP","CCX":"CCX","Treatment":"TX","LOE":"LOE","Delivery":"DEL","Office Visit":"OV","Prophy":"PRO","PMT":"PMT","SRP":"SRP"};
+const DEFAULT_APPT_TYPES=["NP","CCX","Tx","LOE","Delivery","Office Visit","Prophy","PMT","SRP"];
+const APPT_ABBR_MAP={"NP":"NP","CCX":"CCX","Tx":"TX","LOE":"LOE","Delivery":"DEL","Office Visit":"OV","Prophy":"PRO","PMT":"PMT","SRP":"SRP"};
 
 const OP_DATA={status:"ready",note:"New patient",ts:new Date(Date.now()-120000),apptTypes:["NP"],provider:"Dr. Tang"};
 

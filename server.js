@@ -41,6 +41,21 @@ function loadState() {
           const ts = state.ops[k].ts;
           if (ts) state.ops[k].ts = Number(typeof ts === 'string' ? new Date(ts).getTime() : ts);
         });
+        // One-shot migration: legacy "Treatment" appt-type label → "Tx".
+        // Idempotent; runs again on every restart but is a no-op after first save.
+        let migratedTx = 0;
+        const fixArr = arr => {
+          if (!Array.isArray(arr)) return arr;
+          let changed = false;
+          const out = arr.map(t => { if (t === 'Treatment') { changed = true; migratedTx++; return 'Tx'; } return t; });
+          return changed ? out : arr;
+        };
+        if (Array.isArray(state.apptTypes)) state.apptTypes = fixArr(state.apptTypes);
+        Object.values(state.ops).forEach(o => { if (o && Array.isArray(o.apptTypes)) o.apptTypes = fixArr(o.apptTypes); });
+        if (migratedTx > 0) {
+          console.log(`Migrated ${migratedTx} "Treatment" → "Tx" appt-type entries.`);
+          saveState();
+        }
         console.log(`State restored: ${Object.keys(state.ops).length} ops, ${(state.history||[]).length} history entries`);
       } else {
         console.log('Invalid/empty state file — using defaults');

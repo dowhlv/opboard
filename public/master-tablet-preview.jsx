@@ -123,8 +123,8 @@ const INIT_STATUSES=[
   {key:"awaiting", label:"Vacant Clean", abbr:"Clean",   numColor:"#111114",bg:"rgba(255,255,255,0.95)",border:"rgba(255,255,255,0.95)",glow:"0 0 28px rgba(255,255,255,0.4)", menuBg:"rgba(255,255,255,0.9)", menuBorder:"rgba(255,255,255,1)",  menuHover:"rgba(255,255,255,0.8)"},
 ];
 const SM_DEFAULT=Object.fromEntries(INIT_STATUSES.map(s=>[s.key,s]));
-const INIT_APPT_TYPES=["NP","CCX","Treatment","LOE","Delivery","Office Visit","Prophy","PMT","SRP"];
-const APPT_ABBR_MAP={"NP":"NP","CCX":"CCX","Treatment":"TX","LOE":"LOE","Delivery":"DEL","Office Visit":"OV","Prophy":"PRO","PMT":"PMT","SRP":"SRP"};
+const INIT_APPT_TYPES=["NP","CCX","Tx","LOE","Delivery","Office Visit","Prophy","PMT","SRP"];
+const APPT_ABBR_MAP={"NP":"NP","CCX":"CCX","Tx":"TX","LOE":"LOE","Delivery":"DEL","Office Visit":"OV","Prophy":"PRO","PMT":"PMT","SRP":"SRP"};
 const elapsed=d=>{if(!d)return"";const ms=typeof d==='number'?d:d instanceof Date?d.getTime():new Date(d).getTime();const s=Math.floor((Date.now()-ms)/1000);if(s<60)return"<1m";if(s<3600)return`${Math.floor(s/60)}m`;return`${Math.floor(s/3600)}h ${Math.floor((s%3600)/60)}m`;};
 
 const DEMO={

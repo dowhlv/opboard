@@ -507,8 +507,8 @@ function FrontDeskTablet(){
     window.addEventListener('beforeunload',onUnload);
     return()=>{socket.off('state',onState);socket.off('noteLock');socket.off('noteUnlock');socket.off('connect');socket.off('disconnect');window.removeEventListener('beforeunload',onUnload);};
   },[]);
-  const APPT_TYPES=["NP","CCX","Treatment","LOE","Delivery","Office Visit","Prophy","PMT","SRP"];
-const APPT_ABBR_MAP={"NP":"NP","CCX":"CCX","Treatment":"TX","LOE":"LOE","Delivery":"DEL","Office Visit":"OV","Prophy":"PRO","PMT":"PMT","SRP":"SRP"};
+  const APPT_TYPES=["NP","CCX","Tx","LOE","Delivery","Office Visit","Prophy","PMT","SRP"];
+const APPT_ABBR_MAP={"NP":"NP","CCX":"CCX","Tx":"TX","LOE":"LOE","Delivery":"DEL","Office Visit":"OV","Prophy":"PRO","PMT":"PMT","SRP":"SRP"};
   const CLEAR_ON_STATUS=["awaiting","inactive"];
   const setStatus=(op,key)=>{
     const statusLabel=STATUSES.find(s=>s.key===key)?.abbr||key;
