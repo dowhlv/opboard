@@ -1,9 +1,22 @@
 const express = require('express');
 // ── Status History Logging ────────────────────────────────────────────────────
 const fs = require('fs');
+const { execSync } = require('child_process');
 const HISTORY_DIR  = process.env.OPBOARD_DATA_DIR || '/var/lib/opboard';
 const HISTORY_FILE = `${HISTORY_DIR}/history.json`;
 const STATE_FILE   = `${HISTORY_DIR}/state.json`;
+
+// ── Version stamp ────────────────────────────────────────────────────────────
+// Computed once at startup; injected into HTML responses and broadcast over the
+// socket so clients can auto-reload on deploy.
+let SERVER_VERSION;
+try {
+  SERVER_VERSION = execSync('git rev-parse --short HEAD', { cwd: __dirname, stdio: ['ignore','pipe','ignore'] }).toString().trim();
+} catch (e) {
+  SERVER_VERSION = `t${Date.now().toString(36)}`;
+  console.warn('git rev-parse failed, using timestamp version:', SERVER_VERSION);
+}
+console.log('Server version:', SERVER_VERSION);
 
 // Ensure directory exists
 if (!fs.existsSync(HISTORY_DIR)) {
@@ -143,12 +156,20 @@ let state = {
   allOps: Array.from({length:14},(_,i)=>({id:i+1,enabled:true})),
   readyPopupDismissed: {},
   opPin: '0063', // Default op tablet PIN
+  queueOrder: [], // shared AWFA/ready ordering across tablets
 };
 loadState();
 
+// Treat an op id as valid only if it's a positive integer that exists in allOps.
+function isValidOp(op) {
+  const n = Number(op);
+  if (!Number.isInteger(n) || n <= 0) return false;
+  return Array.isArray(state.allOps) && state.allOps.some(o => o.id === n);
+}
+
 // Normalize ts values for broadcast — always send as numbers
 function broadcastState(){
-  const normalized={...state,ops:{}};
+  const normalized={...state,ops:{},version:SERVER_VERSION};
   Object.entries(state.ops).forEach(([k,v])=>{
     normalized.ops[k]={...v,ts:v.ts?Number(v.ts):null};
   });
@@ -174,11 +195,31 @@ io.on('connection', socket => {
   broadcastState();
   socket.on('requestState', () => broadcastState());
 
-  socket.on('setStatus',   ({op,status})   => { if(state.ops[op]){ state.ops[op].status=status; state.ops[op].ts=Number(Date.now()); if(['awaiting','inactive'].includes(status)){state.ops[op].apptTypes=[];state.ops[op].note='';} logHistory(op,status,state.ops[op].apptTypes,state.ops[op].provider); saveState(); } io.emit('state',{...state,ops:Object.fromEntries(Object.entries(state.ops).map(([k,v])=>[ k,{...v,ts:v.ts?Number(v.ts):null}]))}); });
-  socket.on('setApptType', ({op,apptTypes}) => { if(state.ops[op]){ state.ops[op].apptTypes=Array.isArray(apptTypes)?apptTypes:[]; saveState(); } broadcastState(); });
-  socket.on('setNote',     ({op,note})     => { if(state.ops[op]){ state.ops[op].note=note; state.ops[op].noteUpdatedAt=Date.now(); saveState(); } broadcastState(); });
+  socket.on('setStatus', ({op,status}) => {
+    if(!isValidOp(op) || !state.ops[op]) return;
+    state.ops[op].status = status;
+    state.ops[op].ts = Date.now();
+    if(['awaiting','inactive'].includes(status)){ state.ops[op].apptTypes=[]; state.ops[op].note=''; }
+    logHistory(op, status, state.ops[op].apptTypes, state.ops[op].provider);
+    saveState();
+    broadcastState();
+  });
+  socket.on('setApptType', ({op,apptTypes}) => {
+    if(!isValidOp(op) || !state.ops[op]) return;
+    state.ops[op].apptTypes = Array.isArray(apptTypes) ? apptTypes : [];
+    saveState();
+    broadcastState();
+  });
+  socket.on('setNote', ({op,note}) => {
+    if(!isValidOp(op) || !state.ops[op]) return;
+    state.ops[op].note = note;
+    state.ops[op].noteUpdatedAt = Date.now();
+    saveState();
+    broadcastState();
+  });
   socket.on('setProviders',({activeProviders,inactiveProviders}) => { state.activeProviders=activeProviders; state.inactiveProviders=inactiveProviders; saveState(); broadcastState(); });
   socket.on('setOpProvider',({op,provider,status,apptTypes,note}) => {
+    if(!isValidOp(op)) return;
     if(!state.ops[op]) state.ops[op]={provider:null,status:'awaiting',apptTypes:[],note:'',ts:null,noteUpdatedAt:null};
     state.ops[op].provider=provider;
     if(status!==undefined) state.ops[op].status=status;
@@ -188,30 +229,74 @@ io.on('connection', socket => {
     saveState();
     broadcastState();
   });
-  socket.on('setStatuses', ({statuses})  => { state.statuses=statuses; broadcastState(); });
-  socket.on('setApptTypes',({apptTypes}) => { state.apptTypes=apptTypes; broadcastState(); });
-  socket.on('setAllOps',   ({allOps})    => { state.allOps=allOps; saveState(); broadcastState(); });   
+  socket.on('setStatuses', ({statuses})  => { state.statuses=statuses; saveState(); broadcastState(); });
+  socket.on('setApptTypes',({apptTypes}) => { state.apptTypes=apptTypes; saveState(); broadcastState(); });
+  socket.on('setAllOps',   ({allOps})    => { state.allOps=allOps; saveState(); broadcastState(); });
   socket.on('setOpPin',          ({pin})      => { state.opPin=pin; saveState(); broadcastState(); });
   socket.on('setAdminPin',       ({pin})      => { state.adminPin=pin; saveState(); broadcastState(); });
   socket.on('setProviderDefaults',({defaults}) => { state.providerDefaults=defaults; saveState(); broadcastState(); });
   socket.on('setProviderColors',  ({colors})   => { state.providerColors=colors; saveState(); broadcastState(); });
   socket.on('setCustomAbbrevs',   ({abbrevs})  => { state.customAbbrevs=abbrevs; saveState(); broadcastState(); });
+  socket.on('setQueueOrder',      ({order})    => { state.queueOrder = Array.isArray(order) ? order.filter(o => isValidOp(o)).map(Number) : []; saveState(); broadcastState(); });
+  socket.on('reassignOp', ({op, provider}) => {
+    // Single-field update: changes provider only. Preserves ts, status,
+    // apptTypes, note, noteUpdatedAt — used by the drag-reassign UX where
+    // the op keeps its place in queues and keeps every other piece of state.
+    if (!isValidOp(op)) return;
+    if (!state.ops[op]) return;
+    state.ops[op].provider = provider;
+    saveState();
+    broadcastState();
+  });
 
-  // Note locking — broadcast to all OTHER clients (not sender)
-  socket.on('noteLock',   ({op,by}) => { socket.broadcast.emit('noteLock',   {op,by}); });
-  socket.on('noteUnlock', ()        => { socket.broadcast.emit('noteUnlock', {}); });
-  socket.on('dismissReadyPopup', ({op}) => { state.readyPopupDismissed[op]=Date.now(); broadcastState(); });
-  socket.on('clearReadyPopupDismissed', ({op}) => { delete state.readyPopupDismissed[op]; broadcastState(); });
+  // Note locking — broadcast to all OTHER clients (not sender). Carry op id so
+  // clients can scope lock state by op (multiple ops may be edited concurrently).
+  socket.on('noteLock',   ({op,by}) => { if(isValidOp(op)) socket.broadcast.emit('noteLock',   {op:Number(op),by}); });
+  socket.on('noteUnlock', ({op}={}) => { if(op===undefined || isValidOp(op)) socket.broadcast.emit('noteUnlock', {op:op===undefined?null:Number(op)}); });
+  socket.on('dismissReadyPopup',        ({op}) => { if(!isValidOp(op)) return; state.readyPopupDismissed[op]=Date.now(); saveState(); broadcastState(); });
+  socket.on('clearReadyPopupDismissed', ({op}) => { if(!isValidOp(op)) return; delete state.readyPopupDismissed[op]; saveState(); broadcastState(); });
   socket.on('disconnect', () => console.log('Disconnected:', socket.id));
 });
 
+// Flush pending state on shutdown so nothing within the 2s debounce window is lost.
+function flushAndExit() {
+  if (saveTimer) { clearTimeout(saveTimer); saveTimer = null; }
+  try {
+    const tmp = STATE_FILE + '.tmp';
+    fs.writeFileSync(tmp, JSON.stringify(state, null, 2));
+    fs.renameSync(tmp, STATE_FILE);
+    console.log('State flushed on exit.');
+  } catch(e) { console.error('Flush failed:', e.message); }
+  process.exit(0);
+}
+process.on('SIGTERM', flushAndExit);
+process.on('SIGINT',  flushAndExit);
+
 // ── Serve static files + catch-all for SPA routing ───────────────────────────
-app.use(express.static(path.join(__dirname, 'public')));
-app.get('/', (req, res) => res.sendFile(path.join(__dirname, 'public', 'index.html')));
-app.get('/frontdesk', (req, res) => res.sendFile(path.join(__dirname, 'public', 'frontdesk.html')));
-app.get('/tv', (req, res) => res.sendFile(path.join(__dirname, 'public', 'tv.html')));
-app.get('/op/:num', (req, res) => res.sendFile(path.join(__dirname, 'public', 'op.html')));
-app.get('/{*path}', (req, res) => res.sendFile(path.join(__dirname, 'public', 'index.html')));
+// Send an HTML file with {{VERSION}} replaced by SERVER_VERSION. Disables
+// caching on the HTML itself so each request fetches a fresh token (and thus a
+// fresh ?v= query string for the JSX modules referenced inside).
+function sendHtml(htmlFile) {
+  return (req, res) => {
+    fs.readFile(path.join(__dirname, 'public', htmlFile), 'utf8', (err, data) => {
+      if (err) return res.status(500).send('Failed to read ' + htmlFile);
+      res.setHeader('Content-Type', 'text/html; charset=utf-8');
+      res.setHeader('Cache-Control', 'no-store');
+      res.send(data.replace(/\{\{VERSION\}\}/g, SERVER_VERSION));
+    });
+  };
+}
+// Named HTML routes are registered first; they take precedence over the
+// static middleware which would otherwise auto-serve public/index.html for `/`.
+app.get('/', sendHtml('index.html'));
+app.get('/frontdesk', sendHtml('frontdesk.html'));
+app.get('/tv', sendHtml('tv.html'));
+app.get('/op/:num', sendHtml('op.html'));
+// Static assets (JSX, images, socket.io client). `index:false` prevents the
+// static middleware from serving raw HTML files with unreplaced {{VERSION}}.
+app.use(express.static(path.join(__dirname, 'public'), { index: false }));
+// SPA fallback uses the same templated index.
+app.get('/{*path}', sendHtml('index.html'));
 
 const PORT = 3000;
 server.listen(PORT, '0.0.0.0', () => console.log(`Opboard running on port ${PORT}`));

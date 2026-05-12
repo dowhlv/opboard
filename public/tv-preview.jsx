@@ -184,27 +184,6 @@ function ScaledWrapper({ children, designW = 1920, designH = 1080 }) {
   );
 }
 
-const LOGO_SVG = `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 340 70" height="44">
-  <g transform="translate(35,35)">
-    <g fill="rgba(255,255,255,0.55)">
-      <path d="M-5,-22 Q-6,-28 0,-30 Q6,-28 5,-22 L3,-10 Q0,-8 -3,-10 Z" transform="rotate(0)"/>
-      <path d="M-5,-22 Q-6,-28 0,-30 Q6,-28 5,-22 L3,-10 Q0,-8 -3,-10 Z" transform="rotate(30)"/>
-      <path d="M-5,-22 Q-6,-28 0,-30 Q6,-28 5,-22 L3,-10 Q0,-8 -3,-10 Z" transform="rotate(60)"/>
-      <path d="M-5,-22 Q-6,-28 0,-30 Q6,-28 5,-22 L3,-10 Q0,-8 -3,-10 Z" transform="rotate(90)"/>
-      <path d="M-5,-22 Q-6,-28 0,-30 Q6,-28 5,-22 L3,-10 Q0,-8 -3,-10 Z" transform="rotate(120)"/>
-      <path d="M-5,-22 Q-6,-28 0,-30 Q6,-28 5,-22 L3,-10 Q0,-8 -3,-10 Z" transform="rotate(150)"/>
-      <path d="M-5,-22 Q-6,-28 0,-30 Q6,-28 5,-22 L3,-10 Q0,-8 -3,-10 Z" transform="rotate(180)"/>
-      <path d="M-5,-22 Q-6,-28 0,-30 Q6,-28 5,-22 L3,-10 Q0,-8 -3,-10 Z" transform="rotate(210)"/>
-      <path d="M-5,-22 Q-6,-28 0,-30 Q6,-28 5,-22 L3,-10 Q0,-8 -3,-10 Z" transform="rotate(240)"/>
-      <path d="M-5,-22 Q-6,-28 0,-30 Q6,-28 5,-22 L3,-10 Q0,-8 -3,-10 Z" transform="rotate(270)"/>
-      <path d="M-5,-22 Q-6,-28 0,-30 Q6,-28 5,-22 L3,-10 Q0,-8 -3,-10 Z" transform="rotate(300)"/>
-      <path d="M-5,-22 Q-6,-28 0,-30 Q6,-28 5,-22 L3,-10 Q0,-8 -3,-10 Z" transform="rotate(330)"/>
-    </g>
-    <circle r="8" fill="rgba(255,255,255,0.7)"/>
-  </g>
-  <text x="82" y="30" font-family="Arial,sans-serif" font-size="24" font-weight="800" letter-spacing="2.5" fill="rgba(255,255,255,0.85)">DENTISTS</text>
-  <text x="83" y="54" font-family="Arial,sans-serif" font-size="14" font-weight="400" letter-spacing="3.5" fill="rgba(255,255,255,0.55)">OF WEST HENDERSON</text>
-</svg>`;
 
 const STATUSES = [
   { key:"ready",    label:"Ready",        abbr:"Ready",  numColor:"#4ade80", bg:"rgba(34,197,94,0.15)",   border:"rgba(34,197,94,0.5)",    glow:"0 0 30px rgba(74,222,128,0.4)"  },
@@ -243,6 +222,10 @@ const DEMO = {
 };
 const PROVIDERS = ["Dr. Tang","Dr. Ngo","Jordan"];
 const INIT_ALL_OPS = Object.keys(DEMO).map(Number).map(id=>({id,enabled:true}));
+
+// Server version snapshot at first state broadcast. A subsequent mismatch
+// triggers location.reload() so deploys propagate to all open tablets.
+let CLIENT_VERSION = null;
 
 // ── Popup Queue Item ──────────────────────────────────────────────────────────
 function QueueItem({ item, ops, onDismiss, onDragStart, onDragEnter, isDragging }) {
@@ -440,6 +423,10 @@ function TVDisplay() {
   useEffect(()=>{
     if(typeof socket==='undefined') return;
     const onState=state=>{
+      if(state.version){
+        if(CLIENT_VERSION===null) CLIENT_VERSION=state.version;
+        else if(state.version!==CLIENT_VERSION){ location.reload(); return; }
+      }
       if(state.customAbbrevs) setCustomAbbrevs(state.customAbbrevs);
       if(state.providerColors) setProviderColors(state.providerColors);
       if(state.readyPopupDismissed) setReadyPopupDismissedState(state.readyPopupDismissed);
@@ -460,24 +447,17 @@ function TVDisplay() {
     socket.on('disconnect',()=>{setIsOnline(false);setLastDisconnected(new Date());});
     return()=>{socket.off('state',onState);socket.off('connect');socket.off('disconnect');};  },[]);
 
-  // Simulate offline toggle for preview — in production this uses socket connection events
-  useEffect(()=>{
-    const handleOnline=()=>{setIsOnline(true);setLastUpdated(new Date());};
-    const handleOffline=()=>setIsOnline(false);
-    window.addEventListener("online",handleOnline);
-    window.addEventListener("offline",handleOffline);
-    return()=>{window.removeEventListener("online",handleOnline);window.removeEventListener("offline",handleOffline);};
-  },[]);
   const ALL_OPS = allOpsState.filter(o=>o.enabled).map(o=>o.id);
   const fmtDateTime=d=>{const mo=d.getMonth()+1,day=d.getDate(),yr=d.getFullYear();let h=d.getHours(),m=d.getMinutes(),ampm=h>=12?'PM':'AM';h=h%12||12;return`${mo}/${day}/${yr}  ${h}:${String(m).padStart(2,'0')} ${ampm}`;};
   const offlineMinutes=Math.floor((now-lastUpdated)/60000);
   // Queue is DERIVED from ops status — RDY ops only for TV
 
     const providerCols = activeProviders.map(p=>({name:p,rooms:ALL_OPS.filter(op=>ops[op]?.provider===p)}));  const n = providerCols.length;
-  // RDY popup derivation — banner triggers only on ready status
+  // RDY popup derivation — banner triggers only on ready status, oldest first
   const readyOps = ALL_OPS
     .filter(op => ops[op]?.status === "ready")
-    .map(op => ({op, ts: ops[op].ts, type: "rdy"}));
+    .map(op => ({op, ts: ops[op].ts, type: "rdy"}))
+    .sort((a,b)=>(a.ts?new Date(a.ts).getTime():0)-(b.ts?new Date(b.ts).getTime():0));
   const activePopup = readyOps[0] || null;
   // Tick every 30s to re-evaluate popup queue
   useEffect(()=>{const id=setInterval(()=>setPopupTick(t=>t+1),30000);return()=>clearInterval(id);},[]);
@@ -494,16 +474,6 @@ function TVDisplay() {
     ALL_OPS.forEach(op=>{r[op]=ops[op]?.note?abbreviateNote(ops[op].note,customAbbrevs):'';});
     return r;
   },[ops,customAbbrevs]);
-
-  const[showKioskExit,setShowKioskExit]=useState(false);
-  const exitKiosk=()=>{
-    // In production: sends signal to close Chromium kiosk
-    // Preview: just shows confirmation
-    if(typeof window!=='undefined'&&window.location.hostname!=='localhost'&&window.location.hostname!=='127.0.0.1'){
-      fetch('/api/exit-kiosk',{method:'POST'}).catch(()=>{});
-    }
-    setShowKioskExit(false);
-  };
 
   return (
     <ScaledWrapper designW={1920} designH={1080}>
@@ -524,9 +494,10 @@ function TVDisplay() {
 
         {/* ── Header ── */}
         <div style={S.header}>
-          <span dangerouslySetInnerHTML={{__html:LOGO_SVG}} style={{display:"flex",alignItems:"center",flexShrink:0}}/>
-          <div style={{flex:1,display:"flex",justifyContent:"center"}}>
-            <div style={S.headerTitle}>OPERATORY STATUS</div>
+          <img src="/dentists-logo.webp" alt="Dentists of West Henderson" height="44" style={{display:"block",flexShrink:0}}/>
+          <div style={{flex:1,display:"flex",flexDirection:"column",alignItems:"center",justifyContent:"center"}}>
+            <div style={S.headerTitle}>OPBOARD</div>
+            <div style={{fontFamily:"'DM Sans',sans-serif",fontSize:"11px",letterSpacing:"0.18em",color:"rgba(255,255,255,0.3)",fontWeight:600,marginTop:"2px"}}>TV</div>
           </div>
           <div style={{display:"flex",alignItems:"center",gap:"12px",flexShrink:0}}>
             {/* Connection dot */}
@@ -651,7 +622,6 @@ function TVDisplay() {
             );
           })}
         </div>
-        )}
 
         {/* ── Status legend (bottom-left) ── */}
         <div style={{position:"absolute",bottom:"24px",left:"28px",display:"flex",alignItems:"center",gap:"16px",zIndex:500,background:"rgba(0,0,0,0.45)",padding:"10px 18px",borderRadius:"10px",border:"1px solid rgba(255,255,255,0.1)"}}>
@@ -662,19 +632,6 @@ function TVDisplay() {
             </div>
           ))}
         </div>
-        {/* ── Queue screen ── */}
-        {showKioskExit&&(
-          <div style={{position:"absolute",inset:0,background:"rgba(0,0,0,0.88)",zIndex:999,display:"flex",alignItems:"center",justifyContent:"center"}}>
-            <div style={{background:"#1a1a22",borderRadius:"16px",padding:"32px",width:"500px",textAlign:"center",border:"1px solid rgba(255,255,255,0.15)"}}>
-              <div style={{fontFamily:"'Bebas Neue',sans-serif",fontSize:"28px",letterSpacing:"0.12em",color:"#fff",marginBottom:"8px"}}>EXIT KIOSK MODE?</div>
-              <div style={{fontSize:"14px",color:"rgba(255,255,255,0.4)",marginBottom:"24px"}}>This will close the TV display and return to the desktop.</div>
-              <div style={{display:"flex",gap:"12px",justifyContent:"center"}}>
-                <button onClick={()=>setShowKioskExit(false)} style={{padding:"12px 28px",background:"rgba(255,255,255,0.06)",border:"1px solid rgba(255,255,255,0.15)",borderRadius:"10px",color:"rgba(255,255,255,0.6)",fontFamily:"'Bebas Neue',sans-serif",fontSize:"18px",letterSpacing:"0.1em",cursor:"pointer"}}>CANCEL</button>
-                <button onClick={exitKiosk} style={{padding:"12px 28px",background:"rgba(239,68,68,0.15)",border:"1px solid rgba(239,68,68,0.4)",borderRadius:"10px",color:"#ef4444",fontFamily:"'Bebas Neue',sans-serif",fontSize:"18px",letterSpacing:"0.1em",cursor:"pointer"}}>EXIT KIOSK</button>
-              </div>
-            </div>
-          </div>
-        )}
       </div>
         {currentReadyPopup && (
           <div style={{position:"absolute",inset:0,background:"rgba(0,0,0,0.78)",backdropFilter:"blur(4px)",zIndex:900,display:"flex",alignItems:"center",justifyContent:"center"}}>

@@ -59,6 +59,10 @@ function ScaledWrapper({designW,designH,children}){
 const getOpNumber=()=>{const m=window.location.pathname.match(/\/op\/(\d+)/);return m?parseInt(m[1]):1;};
 const OP_NUMBER=getOpNumber();
 
+// Server version snapshot at first state broadcast. A subsequent mismatch
+// triggers location.reload() so deploys propagate to all open tablets.
+let CLIENT_VERSION = null;
+
 const STATUSES=[
   {key:"ready",    abbr:"Ready",       numColor:"#4ade80",bg:"rgba(34,197,94,0.12)",  border:"rgba(34,197,94,0.45)"},
   {key:"treatment",abbr:"Reserved",    numColor:"#60a5fa",bg:"rgba(59,130,246,0.12)", border:"rgba(59,130,246,0.45)"},
@@ -74,7 +78,6 @@ const APPT_ABBR_MAP={"NP":"NP","CCX":"CCX","Treatment":"TX","LOE":"LOE","Deliver
 
 const OP_DATA={status:"ready",note:"New patient",ts:new Date(Date.now()-120000),apptTypes:["NP"],provider:"Dr. Tang"};
 
-const LOGO_SVG=`<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 56 56" width="36" height="36"><circle cx="28" cy="28" r="28" fill="#1a1a2e"/><path d="M18 38 Q14 28 18 20 Q22 14 28 14 Q34 14 38 20 Q42 28 38 38" stroke="#60a5fa" stroke-width="3" fill="none" stroke-linecap="round"/><circle cx="22" cy="22" r="3" fill="#4ade80"/><circle cx="34" cy="22" r="3" fill="#4ade80"/><path d="M22 32 Q28 37 34 32" stroke="#fff" stroke-width="2" fill="none" stroke-linecap="round"/></svg>`;
 
 const elapsed=d=>{
   if(!d)return'';
@@ -100,6 +103,7 @@ function OpTablet(){
   const noteTimeoutRef=useRef(null);
 
   useEffect(()=>{const id=setInterval(()=>setNow(new Date()),1000);return()=>clearInterval(id);},[]);
+  useEffect(()=>{document.title=`Opboard - Op ${OP_NUMBER}`;},[]);
 
   const showToast=msg=>{setToast(msg);clearTimeout(toastRef.current);toastRef.current=setTimeout(()=>setToast(null),2000);};
 
@@ -107,6 +111,10 @@ function OpTablet(){
   useEffect(()=>{
     if(typeof socket==='undefined')return;
     const onState=state=>{
+      if(state.version){
+        if(CLIENT_VERSION===null) CLIENT_VERSION=state.version;
+        else if(state.version!==CLIENT_VERSION){ location.reload(); return; }
+      }
       if(state.apptTypes)setAvailableApptTypes(state.apptTypes);
       if(state.statuses)setStatuses(state.statuses);
       if(state.ops&&state.ops[OP_NUMBER]){
@@ -141,7 +149,7 @@ function OpTablet(){
   const saveNote=val=>{
     clearTimeout(noteTimeoutRef.current);
     setOp(p=>({...p,note:val,noteUpdatedAt:new Date()}));
-    if(typeof socket!=='undefined'){socket.emit('setNote',{op:OP_NUMBER,note:val});socket.emit('noteUnlock',{});}
+    if(typeof socket!=='undefined'){socket.emit('setNote',{op:OP_NUMBER,note:val});socket.emit('noteUnlock',{op:OP_NUMBER});}
     showToast('✓ Note Saved');
     setNoteEdit(null);
   };
@@ -150,7 +158,7 @@ function OpTablet(){
     if(typeof socket!=='undefined')socket.emit('noteLock',{op:OP_NUMBER,by:'op'+OP_NUMBER});
     setNoteEdit({draft:op.note||''});
     clearTimeout(noteTimeoutRef.current);
-    noteTimeoutRef.current=setTimeout(()=>{if(typeof socket!=='undefined')socket.emit('noteUnlock',{});setNoteEdit(null);},30000);
+    noteTimeoutRef.current=setTimeout(()=>{if(typeof socket!=='undefined')socket.emit('noteUnlock',{op:OP_NUMBER});setNoteEdit(null);},30000);
   };
 
   const cfg=SM[op.status]||SM.ready;
@@ -173,19 +181,9 @@ function OpTablet(){
         {/* ── Header ── */}
         <div style={{display:'flex',alignItems:'center',justifyContent:'space-between',
           padding:'10px 14px',borderBottom:'1px solid rgba(255,255,255,0.08)',flexShrink:0,gap:'8px'}}>
-          {/* Left: Logo + two-line title */}
-          <div style={{display:'flex',alignItems:'center',gap:'10px',flexShrink:0}}>
-            <span dangerouslySetInnerHTML={{__html:LOGO_SVG}}/>
-            <div style={{display:'flex',flexDirection:'column',lineHeight:1.1}}>
-              <span style={{fontFamily:"'Bebas Neue',sans-serif",fontSize:'15px',
-                letterSpacing:'0.12em',color:'rgba(255,255,255,0.7)',whiteSpace:'nowrap'}}>
-                DENTISTS OF
-              </span>
-              <span style={{fontFamily:"'Bebas Neue',sans-serif",fontSize:'15px',
-                letterSpacing:'0.12em',color:'#fff',whiteSpace:'nowrap'}}>
-                WEST HENDERSON
-              </span>
-            </div>
+          {/* Left: clinic logo (image already contains the wordmark) */}
+          <div style={{display:'flex',alignItems:'center',flexShrink:0}}>
+            <img src="/dentists-logo.webp" alt="Dentists of West Henderson" height="32" style={{display:'block'}}/>
           </div>
           {/* Right: Date on row 1, Time on row 2 */}
           <div style={{display:'flex',flexDirection:'column',alignItems:'flex-end',
@@ -366,7 +364,7 @@ function OpTablet(){
         {noteEdit&&(
           <div style={{position:'absolute',inset:0,background:'rgba(0,0,0,0.85)',zIndex:200,
             display:'flex',alignItems:'center',justifyContent:'center'}}
-            onMouseDown={()=>{clearTimeout(noteTimeoutRef.current);if(typeof socket!=='undefined')socket.emit('noteUnlock',{});setNoteEdit(null);}}>
+            onMouseDown={()=>{clearTimeout(noteTimeoutRef.current);if(typeof socket!=='undefined')socket.emit('noteUnlock',{op:OP_NUMBER});setNoteEdit(null);}}>
             <div style={{background:'#1a1a22',borderRadius:'16px',padding:'20px',width:'340px',
               boxShadow:'0 32px 80px rgba(0,0,0,0.95)'}} onMouseDown={e=>e.stopPropagation()}>
               <div style={{fontFamily:"'Bebas Neue',sans-serif",fontSize:'16px',letterSpacing:'0.15em',
@@ -374,7 +372,7 @@ function OpTablet(){
               <textarea autoFocus
                 ref={el=>{if(el&&!el.dataset.selected){el.dataset.selected='1';setTimeout(()=>{el.focus();el.select();},50);}}}
                 value={noteEdit.draft} maxLength={40}
-                onChange={e=>{setNoteEdit(p=>({...p,draft:e.target.value.slice(0,40)}));clearTimeout(noteTimeoutRef.current);noteTimeoutRef.current=setTimeout(()=>{if(typeof socket!=='undefined')socket.emit('noteUnlock',{});setNoteEdit(null);},30000);}}
+                onChange={e=>{setNoteEdit(p=>({...p,draft:e.target.value.slice(0,40)}));clearTimeout(noteTimeoutRef.current);noteTimeoutRef.current=setTimeout(()=>{if(typeof socket!=='undefined')socket.emit('noteUnlock',{op:OP_NUMBER});setNoteEdit(null);},30000);}}
                 style={{width:'100%',background:'rgba(255,255,255,0.06)',border:'1px solid rgba(255,255,255,0.15)',
                   borderRadius:'10px',padding:'12px',color:'#fff',fontFamily:"'DM Sans',sans-serif",
                   fontSize:'16px',fontWeight:600,resize:'none',outline:'none',minHeight:'80px'}}
@@ -389,7 +387,7 @@ function OpTablet(){
                 </div>
               </div>
               <div style={{display:'flex',gap:'8px',marginTop:'12px'}}>
-                <button onMouseDown={()=>{clearTimeout(noteTimeoutRef.current);if(typeof socket!=='undefined')socket.emit('noteUnlock',{});setNoteEdit(null);}}
+                <button onMouseDown={()=>{clearTimeout(noteTimeoutRef.current);if(typeof socket!=='undefined')socket.emit('noteUnlock',{op:OP_NUMBER});setNoteEdit(null);}}
                   style={{flex:1,padding:'10px',background:'rgba(255,255,255,0.06)',border:'1px solid rgba(255,255,255,0.12)',
                     borderRadius:'8px',color:'rgba(255,255,255,0.5)',fontFamily:"'Bebas Neue',sans-serif",
                     fontSize:'14px',letterSpacing:'0.1em',cursor:'pointer'}}>CANCEL</button>
