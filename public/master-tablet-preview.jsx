@@ -106,14 +106,13 @@ function ScaledWrapper({children,designW=1340,designH=800}){
   },[designW,designH]);
   return(
     <div style={{width:"100vw",height:"100vh",overflow:"hidden",background:"#0a0a0c",display:"flex",alignItems:"center",justifyContent:"center"}}>
-      <div style={{width:designW,height:designH,transform:`scale(${scale})`,transformOrigin:"center center",flexShrink:0,position:"relative"}}>
+      <div data-scaled-inner style={{width:designW,height:designH,transform:`scale(${scale})`,transformOrigin:"center center",flexShrink:0,position:"relative"}}>
         {children}
       </div>
     </div>
   );
 }
 
-const LOGO_SVG=`<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 340 70" height="36"><g transform="translate(35,35)"><g fill="rgba(255,255,255,0.55)"><path d="M-5,-22 Q-6,-28 0,-30 Q6,-28 5,-22 L3,-10 Q0,-8 -3,-10 Z" transform="rotate(0)"/><path d="M-5,-22 Q-6,-28 0,-30 Q6,-28 5,-22 L3,-10 Q0,-8 -3,-10 Z" transform="rotate(30)"/><path d="M-5,-22 Q-6,-28 0,-30 Q6,-28 5,-22 L3,-10 Q0,-8 -3,-10 Z" transform="rotate(60)"/><path d="M-5,-22 Q-6,-28 0,-30 Q6,-28 5,-22 L3,-10 Q0,-8 -3,-10 Z" transform="rotate(90)"/><path d="M-5,-22 Q-6,-28 0,-30 Q6,-28 5,-22 L3,-10 Q0,-8 -3,-10 Z" transform="rotate(120)"/><path d="M-5,-22 Q-6,-28 0,-30 Q6,-28 5,-22 L3,-10 Q0,-8 -3,-10 Z" transform="rotate(150)"/><path d="M-5,-22 Q-6,-28 0,-30 Q6,-28 5,-22 L3,-10 Q0,-8 -3,-10 Z" transform="rotate(180)"/><path d="M-5,-22 Q-6,-28 0,-30 Q6,-28 5,-22 L3,-10 Q0,-8 -3,-10 Z" transform="rotate(210)"/><path d="M-5,-22 Q-6,-28 0,-30 Q6,-28 5,-22 L3,-10 Q0,-8 -3,-10 Z" transform="rotate(240)"/><path d="M-5,-22 Q-6,-28 0,-30 Q6,-28 5,-22 L3,-10 Q0,-8 -3,-10 Z" transform="rotate(270)"/><path d="M-5,-22 Q-6,-28 0,-30 Q6,-28 5,-22 L3,-10 Q0,-8 -3,-10 Z" transform="rotate(300)"/><path d="M-5,-22 Q-6,-28 0,-30 Q6,-28 5,-22 L3,-10 Q0,-8 -3,-10 Z" transform="rotate(330)"/></g><circle r="8" fill="rgba(255,255,255,0.7)"/></g><text x="82" y="28" font-family="Arial,sans-serif" font-size="22" font-weight="800" letter-spacing="2.5" fill="rgba(255,255,255,0.85)">DENTISTS</text><text x="83" y="50" font-family="Arial,sans-serif" font-size="13" font-weight="400" letter-spacing="3.5" fill="rgba(255,255,255,0.55)">OF WEST HENDERSON</text></svg>`;
 
 const INIT_STATUSES=[
   {key:"ready",    label:"Ready",        abbr:"Ready",  numColor:"#4ade80",bg:"rgba(34,197,94,0.12)",  border:"rgba(34,197,94,0.45)",  glow:"0 0 28px rgba(74,222,128,0.35)", menuBg:"rgba(34,197,94,0.18)",  menuBorder:"rgba(34,197,94,0.6)",  menuHover:"rgba(34,197,94,0.28)" },
@@ -126,7 +125,7 @@ const INIT_STATUSES=[
 const SM_DEFAULT=Object.fromEntries(INIT_STATUSES.map(s=>[s.key,s]));
 const INIT_APPT_TYPES=["NP","CCX","Treatment","LOE","Delivery","Office Visit","Prophy","PMT","SRP"];
 const APPT_ABBR_MAP={"NP":"NP","CCX":"CCX","Treatment":"TX","LOE":"LOE","Delivery":"DEL","Office Visit":"OV","Prophy":"PRO","PMT":"PMT","SRP":"SRP"};
-const elapsed=d=>{if(!d)return"";const s=Math.floor((Date.now()-d.getTime())/1000);if(s<60)return"<1m";if(s<3600)return`${Math.floor(s/60)}m`;return`${Math.floor(s/3600)}h ${Math.floor((s%3600)/60)}m`;};
+const elapsed=d=>{if(!d)return"";const ms=typeof d==='number'?d:d instanceof Date?d.getTime():new Date(d).getTime();const s=Math.floor((Date.now()-ms)/1000);if(s<60)return"<1m";if(s<3600)return`${Math.floor(s/60)}m`;return`${Math.floor(s/3600)}h ${Math.floor((s%3600)/60)}m`;};
 
 const DEMO={
   1: {status:"ready",    note:"New patient",    ts:new Date(Date.now()-120000),  apptTypes:["NP"],  provider:"Dr. Tang"},
@@ -148,6 +147,10 @@ const INIT_ACTIVE=["Dr. Tang","Dr. Ngo","Jordan"];
 const INIT_INACTIVE=["OS","Endo","Perio"];
 const INIT_ALL_OPS=Object.keys(DEMO).map(Number).map(id=>({id,enabled:true}));
 const DESIGN_H=800;
+
+// Server version snapshot at first state broadcast. A subsequent mismatch
+// triggers location.reload() so deploys propagate to all open tablets.
+let CLIENT_VERSION = null;
 
 // ── History Modal — working tabs + custom date range ─────────────────────────
 function HistoryModal({ ops, statuses, allOps, onClose }) {
@@ -261,8 +264,11 @@ function HistoryModal({ ops, statuses, allOps, onClose }) {
 // ── Appt Type Modal — centered, multi-select with DONE button ────────────────
 function ModalMenu({op, menuType, ops, onClose, onSetStatus, onSetApptType, statuses=INIT_STATUSES, apptTypes=INIT_APPT_TYPES}){
   const SM=Object.fromEntries((statuses||INIT_STATUSES).map(s=>[s.key,s]));
-  const {status, apptTypes:selectedTypes=[]} = ops[op] || {};
+  const {status} = ops[op] || {};
   const cfg = SM[status] || SM.ready;
+  // Local draft — selections are not committed to ops/server until DONE.
+  // CANCEL or backdrop discard the draft.
+  const [draft, setDraft] = useState(() => (ops[op]?.apptTypes || []).slice());
   return(
     <div style={{background:"#16161a",border:`1px solid ${cfg.numColor}44`,borderRadius:"16px",
       padding:"20px",width:"340px",fontFamily:"'DM Sans',sans-serif",
@@ -273,11 +279,11 @@ function ModalMenu({op, menuType, ops, onClose, onSetStatus, onSetApptType, stat
         APPT TYPE · OP {op}
       </div>
       <div style={{fontSize:"11px",color:cfg.numColor,textAlign:"center",marginBottom:"14px",opacity:0.7}}>
-        {(selectedTypes||[]).length>0?(selectedTypes||[]).join(' · '):'Tap to select'}
+        {draft.length>0?draft.join(' · '):'Tap to select'}
       </div>
       <div style={{display:"flex",flexDirection:"column",gap:"6px"}}>
         {(apptTypes||INIT_APPT_TYPES).map(t=>{
-          const active=(selectedTypes||[]).includes(t);
+          const active=draft.includes(t);
           const accent=ops[op]?.status==="awaiting"?"#fff":cfg.numColor;
           return(
             <button key={t}
@@ -287,9 +293,7 @@ function ModalMenu({op, menuType, ops, onClose, onSetStatus, onSetApptType, stat
                 display:"flex",alignItems:"center",gap:"12px"}}
               onMouseDown={e=>{
                 e.stopPropagation();
-                const cur=selectedTypes||[];
-                const next=active?cur.filter(x=>x!==t):[...cur,t];
-                onSetApptType(op,next);
+                setDraft(prev => prev.includes(t) ? prev.filter(x=>x!==t) : [...prev, t]);
               }}>
               <span style={{width:"16px",height:"16px",borderRadius:"4px",flexShrink:0,
                 background:active?(accent==="#fff"?"#000":accent):"transparent",
@@ -307,7 +311,7 @@ function ModalMenu({op, menuType, ops, onClose, onSetStatus, onSetApptType, stat
           style={{flex:1,padding:"10px",background:"rgba(255,255,255,0.05)",border:"1px solid rgba(255,255,255,0.15)",
             borderRadius:"8px",color:"rgba(255,255,255,0.5)",fontFamily:"'Bebas Neue',sans-serif",
             fontSize:"14px",letterSpacing:"0.1em",cursor:"pointer"}}>CANCEL</button>
-        <button onMouseDown={e=>{e.stopPropagation();onClose();}}
+        <button onMouseDown={e=>{e.stopPropagation();onSetApptType(op,draft);onClose();}}
           style={{flex:2,padding:"10px",background:"rgba(74,222,128,0.12)",border:"1px solid rgba(74,222,128,0.4)",
             borderRadius:"8px",color:"#4ade80",fontFamily:"'Bebas Neue',sans-serif",
             fontSize:"14px",letterSpacing:"0.1em",cursor:"pointer"}}>✓ DONE</button>
@@ -315,96 +319,6 @@ function ModalMenu({op, menuType, ops, onClose, onSetStatus, onSetApptType, stat
     </div>
   );
 }
-
-function FloatingMenu({op, menuType, ops, cardRef, onClose, onSetStatus, onSetApptType, statuses=INIT_STATUSES, apptTypes=INIT_APPT_TYPES}){
-  const SM=Object.fromEntries((statuses||INIT_STATUSES).map(s=>[s.key,s]));
-  const menuRef=useRef(null);
-  const [style,setStyle]=useState({display:"none"});
-
-  useEffect(()=>{
-    const card=cardRef.current;
-    if(!card) return;
-    let top=0, left=0, el=card;
-    const rootEl=card.closest('[data-root]');
-    while(el && el!==rootEl){ top+=el.offsetTop; left+=el.offsetLeft; el=el.offsetParent; }
-    const cardH=card.offsetHeight;
-    const width=Math.max(card.offsetWidth,240);
-    const menuH=menuType==="status"?statuses.length*46+44:(apptTypes.length+1)*46+44;
-    const spaceBelow=DESIGN_H-top-cardH-60;
-    const goUp=spaceBelow<menuH;
-    // Find the bottom of the page header so menu never goes above it
-    const headerEl=rootEl?.querySelector('[data-header]');
-    let minTop=8;
-    if(headerEl){
-      let hTop=0, hEl=headerEl;
-      while(hEl && hEl!==rootEl){ hTop+=hEl.offsetTop; hEl=hEl.offsetParent; }
-      minTop=hTop+headerEl.offsetHeight+4;
-    }
-    const rawTop = goUp ? top-menuH-4 : top+cardH+4;
-    setStyle({
-      position:"absolute",
-      top: Math.max(minTop, rawTop),
-      left: Math.max(8, left),
-      width,
-      display:"flex",
-    });
-  },[cardRef,menuType]);
-
-  // Close when clicking outside — use mousedown on document
-  useEffect(()=>{
-    const handler=e=>{
-      if(menuRef.current&&!menuRef.current.contains(e.target)){
-        onClose();
-      }
-    };
-    const t=setTimeout(()=>document.addEventListener("mousedown",handler),100);
-    return()=>{clearTimeout(t);document.removeEventListener("mousedown",handler);};
-  },[onClose]);
-
-  const{status,apptType}=ops[op];
-  const cfg=SM[status]||SM.ready;
-
-  return(
-    <div ref={menuRef}
-      style={{...style,background:"#1e1e24",border:"1px solid rgba(255,255,255,0.2)",borderRadius:"12px",padding:"10px 8px",zIndex:900,boxShadow:"0 20px 60px rgba(0,0,0,0.97)",flexDirection:"column",gap:"2px"}}
-      onMouseDown={e=>e.stopPropagation()}>
-      <div style={{fontSize:"10px",letterSpacing:"0.2em",color:"rgba(255,255,255,0.2)",padding:"3px 8px 8px",borderBottom:"1px solid rgba(255,255,255,0.06)",marginBottom:"3px"}}>
-        {menuType==="status"?`STATUS · OP ${op}`:`APPOINTMENT TYPE · OP ${op}`}
-      </div>
-      {menuType==="status"
-        ? statuses.map(s=>{
-            const dc=s.key==="awaiting"?(status===s.key?"#000":"#fff"):s.numColor;
-            return(
-              <div key={s.key} className="menu-item"
-                style={{background:status===s.key?s.menuBg:"#1e1e24",borderColor:status===s.key?s.menuBorder:"transparent"}}
-                onMouseEnter={e=>e.currentTarget.style.background=s.menuHover}
-                onMouseLeave={e=>e.currentTarget.style.background=status===s.key?s.menuBg:"#1e1e24"}
-                onMouseDown={e=>{e.stopPropagation();onSetStatus(op,s.key);}}>
-                <span style={{width:"11px",height:"11px",borderRadius:"50%",background:dc,boxShadow:`0 0 6px ${dc}`,flexShrink:0}}/>
-                <span style={{fontSize:"16px",fontWeight:700,flex:1,color:dc}}>{s.abbr}</span>
-                {status===s.key&&<span style={{fontSize:"13px",color:dc}}>✓</span>}
-              </div>
-            );
-          })
-        : [null,...apptTypes].map(t=>{
-            const active=apptType===t;
-            return(
-              <div key={t||"none"} className="menu-item"
-                style={{background:active?`${cfg.numColor}22`:"#1e1e24",borderColor:active?`${cfg.numColor}55`:"transparent"}}
-                onMouseEnter={e=>e.currentTarget.style.background=`${cfg.numColor}18`}
-                onMouseLeave={e=>e.currentTarget.style.background=active?`${cfg.numColor}22`:"#1e1e24"}
-                onMouseDown={e=>{e.stopPropagation();onSetApptType(op,t);}}>
-                <span style={{width:"11px",height:"11px",borderRadius:"50%",background:t?cfg.numColor:"transparent",border:t?"none":"1px solid rgba(255,255,255,0.3)",flexShrink:0}}/>
-                <span style={{fontSize:"16px",fontWeight:700,flex:1,color:active?cfg.numColor:"rgba(255,255,255,0.8)"}}>{t||"—"}</span>
-                {active&&<span style={{fontSize:"13px",color:cfg.numColor}}>✓</span>}
-              </div>
-            );
-          })
-      }
-    </div>
-  );
-}
-
 
 // ── Editable draggable list — top-level to respect hooks rules ────────────────
 function EditableList({ items, setItems, showColor }) {
@@ -451,11 +365,6 @@ function EditableList({ items, setItems, showColor }) {
     </div>
   );
 }
-
-// ── Safe socket emit helper ──────────────────────────────────────────────────
-const safeEmit = (event, data) => {
-  try { if (typeof socket !== 'undefined') socket.emit(event, data); } catch(e) {}
-};
 
 // ── Master Menu (PIN-protected admin panel) ───────────────────────────────────
 const MASTER_PIN = "4001";
@@ -696,17 +605,23 @@ function MasterTablet(){
   const noteDraftRef=useRef(""); // always tracks latest draft value
   const noteDidSelect=useRef(false);
   const[activeProviders,setActiveProviders]=useState(INIT_ACTIVE);
-  const[menuVersion,setMenuVersion]=useState('B');
-  const[notifStyle,setNotifStyle]=useState('corner');
   const[customAbbrevs,setCustomAbbrevs]=useState([]);
   const[providerColors,setProviderColors]=useState({});
   const [showQueue, setShowQueue] = useState(false);
   const [readyPopupDismissedState,setReadyPopupDismissedState]=useState({});
   const [popupTick,setPopupTick]=useState(0);
-  const [dragId,setDragId]=useState(null);
-  const [touchPos,setTouchPos]=useState(null);
-  const grabOffset=useRef({x:180,y:30});
+  // Unified drag (kind: 'reassign' for provider columns, 'queue' for queue overlay).
+  const [drag,setDrag]=useState(null);
+  const [dragOverCol,setDragOverCol]=useState(null);
   const [dragOverId,setDragOverId]=useState(null);
+  const [confirmDragMove,setConfirmDragMove]=useState(null);
+  const dragRef=useRef(null);
+  const dragOverColRef=useRef(null);
+  const dragOverIdRef=useRef(null);
+  const holdTimerRef=useRef(null);
+  useEffect(()=>{dragRef.current=drag;},[drag]);
+  useEffect(()=>{dragOverColRef.current=dragOverCol;},[dragOverCol]);
+  useEffect(()=>{dragOverIdRef.current=dragOverId;},[dragOverId]);
   const [queueOrder,setQueueOrder]=useState([]);
   const[noteLocked,setNoteLocked]=useState(null);
   const[masterToast,setMasterToast]=useState(null);
@@ -742,7 +657,6 @@ function MasterTablet(){
   const[statuses,setStatuses]=useState(INIT_STATUSES);
   const[availableApptTypes,setAvailableApptTypes]=useState(INIT_APPT_TYPES);
   const[allOpsState,setAllOpsState]=useState([]);
-  const cardRefs=useRef({});
   const[,setTick]=useState(0);
   const[now,setNow]=useState(new Date());
 
@@ -752,6 +666,10 @@ function MasterTablet(){
   useEffect(()=>{
     if(typeof socket==='undefined') return;
     const onState=state=>{
+      if(state.version){
+        if(CLIENT_VERSION===null) CLIENT_VERSION=state.version;
+        else if(state.version!==CLIENT_VERSION){ location.reload(); return; }
+      }
       if(state.allOps) setAllOpsState(state.allOps);
       if(state.activeProviders) setActiveProviders(state.activeProviders);
       if(state.inactiveProviders) setInactiveProviders(state.inactiveProviders);
@@ -760,6 +678,7 @@ function MasterTablet(){
       if(state.customAbbrevs) setCustomAbbrevs(state.customAbbrevs);
       if(state.providerColors) setProviderColors(state.providerColors);
       if(state.readyPopupDismissed) setReadyPopupDismissedState(state.readyPopupDismissed);
+      if(Array.isArray(state.queueOrder)) setQueueOrder(state.queueOrder);
       if(state.ops) setOps(prev=>{
         const merged={...prev};
         Object.keys(state.ops).forEach(k=>{
@@ -769,8 +688,17 @@ function MasterTablet(){
       });
     };
     socket.on('state',onState);
+    socket.on('noteLock',({op,by})=>setNoteLocked({op,by}));
+    socket.on('noteUnlock',({op}={})=>setNoteLocked(prev=>(prev && (op===null||op===undefined||prev.op===op))?null:prev));
     socket.emit('requestState');
-    return () => socket.off('state',onState);
+    const onUnload=()=>socket.emit('noteUnlock',{op:null});
+    window.addEventListener('beforeunload',onUnload);
+    return ()=>{
+      socket.off('state',onState);
+      socket.off('noteLock');
+      socket.off('noteUnlock');
+      window.removeEventListener('beforeunload',onUnload);
+    };
   },[]);
   const SM=Object.fromEntries(statuses.map(s=>[s.key,s]));
   // emitSocket: safe wrapper — no-ops gracefully in preview where socket is undefined
@@ -811,70 +739,197 @@ function MasterTablet(){
   // eslint-disable-next-line no-unused-vars
   const _popupTickDep=popupTick;
   const currentReadyPopup=readyPopupQueue[0]||null;
-  const touchHoldTimer=useRef(null);
-  const touchActiveRef=useRef(false);
-  const onTouchHoldStart=(id,e)=>{
-    const t0=e.touches[0];
-    const startX=t0.clientX, startY=t0.clientY;
-    const rect=e.currentTarget.getBoundingClientRect();
-    grabOffset.current={x:t0.clientX-rect.left,y:t0.clientY-rect.top};
-    e.stopPropagation();
-    if(touchHoldTimer.current)clearTimeout(touchHoldTimer.current);
-    touchHoldTimer.current=setTimeout(()=>{
-      setDragId(id);
-      setTouchPos({x:startX,y:startY});
-      touchActiveRef.current=true;
-      if(navigator.vibrate)navigator.vibrate(40);
-    },400);
+
+  // ── Unified drag system (reassign + queue) ────────────────────────────────
+  // Tap-vs-drag arbitration: a touch/click on a card primes a gesture. The
+  // gesture promotes to a drag when either (a) the 400ms hold fires, or
+  // (b) the pointer moves ≥10px before release. Otherwise it resolves as a
+  // tap, and the button's onClick fires its modal-opening action. The
+  // dragPromotedRef flag tells onClick handlers to skip their action.
+  const HOLD_MS = 400;
+  const MOVE_PROMOTE_PX = 10;
+  const primedRef = useRef(null);
+  const dragPromotedRef = useRef(false);
+  const cancelHold = () => {
+    if (holdTimerRef.current) { clearTimeout(holdTimerRef.current); holdTimerRef.current = null; }
+    primedRef.current = null;
   };
-  const onTouchHoldMove=(e)=>{
-    if(!touchActiveRef.current){
-      if(touchHoldTimer.current){clearTimeout(touchHoldTimer.current);touchHoldTimer.current=null;}
-      return;
-    }
-    const t=e.touches[0];
-    setTouchPos({x:t.clientX,y:t.clientY});
-    const el=document.elementFromPoint(t.clientX,t.clientY);
-    const item=el?.closest('[data-queue-item-id]');
-    if(item){
-      const id=parseInt(item.getAttribute('data-queue-item-id'));
-      if(!isNaN(id))setDragOverId(id);
-    }
+  const promoteToDrag = () => {
+    const p = primedRef.current;
+    if (!p || dragRef.current) return;
+    primedRef.current = null;
+    if (holdTimerRef.current) { clearTimeout(holdTimerRef.current); holdTimerRef.current = null; }
+    dragPromotedRef.current = true;
+    setMenu(null);
+    setNoteEdit(prev => {
+      if (prev) emitSocket('noteUnlock', { op: prev.op });
+      return null;
+    });
+    setDrag({
+      kind: p.kind, ...p.payload,
+      startX: p.startX, startY: p.startY,
+      originalLeft: p.rect.left, originalTop: p.rect.top,
+      originalWidth: p.rect.width, originalHeight: p.rect.height,
+      scale: p.scale, pointerX: p.startX, pointerY: p.startY,
+    });
+    if (navigator.vibrate) navigator.vibrate(40);
   };
-  const handleQueueDragEnd=()=>{
-    if(dragId!==null && dragOverId!==null && dragId!==dragOverId){
-      setQueueOrder(prev=>{
-        const arr=[...prev];
-        const fromIdx=arr.indexOf(dragId);
-        const toIdx=arr.indexOf(dragOverId);
-        if(fromIdx<0||toIdx<0)return prev;
-        const[moved]=arr.splice(fromIdx,1);
-        arr.splice(toIdx,0,moved);
-        return arr;
-      });
-    }
-    setDragId(null);setDragOverId(null);
+  const primeDrag = (kind, payload, e) => {
+    cancelHold();
+    dragPromotedRef.current = false;
+    const t = e.touches ? e.touches[0] : e;
+    const startX = t.clientX, startY = t.clientY;
+    const cardEl = e.currentTarget;
+    const rect = cardEl.getBoundingClientRect();
+    const inner = document.querySelector('[data-scaled-inner]');
+    const scale = inner ? inner.getBoundingClientRect().width / 1340 : 1;
+    primedRef.current = { kind, payload, startX, startY, rect, scale };
+    holdTimerRef.current = setTimeout(() => {
+      holdTimerRef.current = null;
+      promoteToDrag();
+    }, HOLD_MS);
   };
-  const onTouchHoldEnd=(e)=>{
-    if(touchHoldTimer.current){clearTimeout(touchHoldTimer.current);touchHoldTimer.current=null;}
-    if(touchActiveRef.current){
-      touchActiveRef.current=false;
-      setTouchPos(null);
-      handleQueueDragEnd();
+  // While primed, ≥10px movement promotes to drag immediately.
+  const maybePromoteOnMove = (e) => {
+    const p = primedRef.current;
+    if (!p || dragRef.current) return;
+    const t = e.touches ? e.touches[0] : e;
+    const dx = t.clientX - p.startX;
+    const dy = t.clientY - p.startY;
+    if (Math.hypot(dx, dy) >= MOVE_PROMOTE_PX) promoteToDrag();
+  };
+  // onClick guard: returns true if onClick should skip its modal action.
+  const consumeDragSuppressedClick = (e) => {
+    if (dragPromotedRef.current) {
+      dragPromotedRef.current = false;
+      if (e) { e.preventDefault(); e.stopPropagation(); }
+      return true;
     }
+    return false;
+  };
+  // Compute which provider column the dragged card has ≥50% overlap with.
+  // Source provider is excluded so dropping back on the origin column cancels.
+  const computeReassignDropTarget = (cardRect, sourceProvider) => {
+    const cardArea = cardRect.width * cardRect.height;
+    if (cardArea <= 0) return null;
+    let best = null, bestArea = 0;
+    document.querySelectorAll('[data-provider-col]').forEach(col => {
+      const name = col.getAttribute('data-provider-col');
+      if (name === sourceProvider) return;
+      const r = col.getBoundingClientRect();
+      const ix = Math.max(0, Math.min(cardRect.right, r.right) - Math.max(cardRect.left, r.left));
+      const iy = Math.max(0, Math.min(cardRect.bottom, r.bottom) - Math.max(cardRect.top, r.top));
+      const area = ix * iy;
+      if (area > bestArea) { best = name; bestArea = area; }
+    });
+    return bestArea >= cardArea * 0.5 ? best : null;
+  };
+  // Window listeners attach once per drag (when drag goes null → object).
+  useEffect(() => {
+    if (!drag) return;
+    const onMove = (e) => {
+      const cur = dragRef.current;
+      if (!cur) return;
+      if (e.cancelable && e.touches) e.preventDefault();
+      const t = e.touches ? e.touches[0] : e;
+      const x = t.clientX, y = t.clientY;
+      setDrag(d => d ? { ...d, pointerX: x, pointerY: y } : d);
+      if (cur.kind === 'reassign') {
+        const dx = x - cur.startX, dy = y - cur.startY;
+        const cardRect = {
+          left:   cur.originalLeft + dx,
+          top:    cur.originalTop  + dy,
+          right:  cur.originalLeft + dx + cur.originalWidth,
+          bottom: cur.originalTop  + dy + cur.originalHeight,
+          width:  cur.originalWidth,
+          height: cur.originalHeight,
+        };
+        const targetCol = computeReassignDropTarget(cardRect, cur.sourceProvider);
+        // Write the ref synchronously so onUp sees the latest value regardless of
+        // when React commits the state-driven mirror.
+        dragOverColRef.current = targetCol;
+        setDragOverCol(targetCol);
+      } else {
+        const el = document.elementFromPoint(x, y);
+        let qi = el?.closest('[data-queue-item-id]');
+        // If nothing matched but the pointer is below the last row, treat it as a
+        // drop on the last visible queue item (so "drop past the end" lands at end).
+        if (!qi) {
+          const items = document.querySelectorAll('[data-queue-item-id]');
+          if (items.length) {
+            const last = items[items.length - 1];
+            const r = last.getBoundingClientRect();
+            if (y > r.bottom) qi = last;
+          }
+        }
+        const nextOver = qi ? Number(qi.getAttribute('data-queue-item-id')) : null;
+        dragOverIdRef.current = nextOver;
+        setDragOverId(nextOver);
+      }
+    };
+    const onUp = () => {
+      const cur = dragRef.current;
+      if (cur) {
+        if (cur.kind === 'reassign') {
+          const target = dragOverColRef.current;
+          if (target && target !== cur.sourceProvider) {
+            setConfirmDragMove({ op: cur.op, from: cur.sourceProvider, to: target });
+          }
+        } else if (cur.kind === 'queue') {
+          const overId = dragOverIdRef.current;
+          if (overId !== null && overId !== cur.itemId) {
+            setQueueOrder(prev => {
+              const arr = [...prev];
+              const fromIdx = arr.indexOf(cur.itemId);
+              const toIdx   = arr.indexOf(overId);
+              if (fromIdx < 0 || toIdx < 0) return prev;
+              const [moved] = arr.splice(fromIdx, 1);
+              arr.splice(toIdx, 0, moved);
+              emitSocket('setQueueOrder', { order: arr });
+              return arr;
+            });
+          }
+        }
+      }
+      setDrag(null);
+      setDragOverCol(null);
+      setDragOverId(null);
+    };
+    window.addEventListener('mousemove', onMove);
+    window.addEventListener('mouseup',   onUp);
+    window.addEventListener('touchmove', onMove, { passive: false });
+    window.addEventListener('touchend',  onUp);
+    window.addEventListener('touchcancel', onUp);
+    return () => {
+      window.removeEventListener('mousemove', onMove);
+      window.removeEventListener('mouseup',   onUp);
+      window.removeEventListener('touchmove', onMove);
+      window.removeEventListener('touchend',  onUp);
+      window.removeEventListener('touchcancel', onUp);
+    };
+  }, [!!drag]);
+  const commitReassign = () => {
+    if (!confirmDragMove) return;
+    const { op, to } = confirmDragMove;
+    setOps(p => ({ ...p, [op]: { ...p[op], provider: to } }));
+    emitSocket('reassignOp', { op, provider: to });
+    setConfirmDragMove(null);
   };
   const dismissReadyPopup=()=>{
     if(!currentReadyPopup)return;
     emitSocket('dismissReadyPopup',{op:currentReadyPopup.op});
   };
-  // Clear dismissal when op leaves ready (server-side)
+  // Clear dismissal when op leaves ready (server-side). Run when the set of
+  // ready ops changes — not on every unrelated ops field update.
+  const readyOpsKey = readyOps.map(r=>r.op).join('-');
   useEffect(()=>{
     Object.keys(readyPopupDismissedState).forEach(op=>{
       if(ops[op]?.status!=='ready'){
         emitSocket('clearReadyPopupDismissed',{op:Number(op)});
       }
     });
-  },[ops]);
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  },[readyOpsKey]);
   
   const fmtDate=d=>`${d.getMonth()+1}/${d.getDate()}/${d.getFullYear()}`;
   const fmtTime=d=>{let h=d.getHours(),m=d.getMinutes(),ap=h>=12?"PM":"AM";h=h%12||12;return`${h}:${String(m).padStart(2,"0")} ${ap}`;};
@@ -897,7 +952,7 @@ function MasterTablet(){
     Object.keys(ops).forEach(op=>{r[op]=ops[op]?.note?abbreviateNote(ops[op].note,customAbbrevs):'';});
     return r;
   },[ops,customAbbrevs]);
-  const providerCols=activeProviders.map(p=>({name:p,rooms:enabledOps.filter(op=>ops[op]?.provider===p)}));
+  const providerCols=activeProviders.map(p=>({name:p,rooms:enabledOps.filter(op=>ops[op]?.provider===p).sort((a,b)=>a-b)}));
   const n=providerCols.length;
 
   return(
@@ -908,9 +963,10 @@ function MasterTablet(){
 
         {/* Header */}
         <div data-header style={S.header}>
-          <span dangerouslySetInnerHTML={{__html:LOGO_SVG}} style={{display:"flex",alignItems:"center",flexShrink:0}}/>
-          <div style={{flex:1,display:"flex",justifyContent:"center"}}>
-            <div style={S.headerTitle}>OPERATORY STATUS</div>
+          <img src="/dentists-logo.webp" alt="Dentists of West Henderson" height="36" style={{display:"block",flexShrink:0}}/>
+          <div style={{flex:1,display:"flex",flexDirection:"column",alignItems:"center",justifyContent:"center"}}>
+            <div style={S.headerTitle}>OPBOARD</div>
+            <div style={{fontFamily:"'DM Sans',sans-serif",fontSize:"11px",letterSpacing:"0.18em",color:"rgba(255,255,255,0.3)",fontWeight:600,marginTop:"2px"}}>MAIN</div>
           </div>
           <div style={{fontFamily:"'DM Sans',sans-serif",fontSize:"14px",fontWeight:600,color:"rgba(255,255,255,0.75)",flexShrink:0,textAlign:"right"}}>
             {fmtDate(now)}<span style={{display:"inline-block",width:"28px"}}/>{fmtTime(now)}
@@ -967,8 +1023,15 @@ function MasterTablet(){
             const timSz=`clamp(11px,${1.38/n}vw,17.5px)`;   // +25% same ratio as numSz
             const namSz=`clamp(22px,${4.5/n}vw,58px)`;
             const apptW=`calc(${bdgSz} * 1.75)`;
+            const isValidTarget = drag?.kind==='reassign' && dragOverCol===name && drag.sourceProvider!==name;
+            const provCol = providerColors?.[name] || '#fff';
             return(
-              <div key={name} style={S.col}>
+              <div key={name} data-provider-col={name}
+                style={{...S.col,
+                  background: isValidTarget ? `${provCol}1f` : undefined,
+                  border:     isValidTarget ? `2px dashed ${provCol}` : undefined,
+                  borderRadius: isValidTarget ? "8px" : undefined,
+                  transition: "background .15s, border-color .15s"}}>
                 <div style={{...S.provName,fontSize:namSz}}>{name}</div>
                 <div style={S.provDiv}/>
                 {rooms.length===0&&(
@@ -978,25 +1041,37 @@ function MasterTablet(){
                 )}
                 <div style={{...S.roomCol,display:"grid",gridTemplateRows:`repeat(${Math.max(rooms.length,3)},1fr)`}}>
                   {rooms.map(op=>{
-                    if(!cardRefs.current[op]) cardRefs.current[op]=createRef();
                     const{status,note,ts,apptTypes=[]}=ops[op]||{};
                     const cfg=SM[status]||SM.ready;
                     const isInactive=status==="inactive";
                     const isOpen=menu?.op===op&&menu?.type==="status";
                     const apptOpen=menu?.op===op&&menu?.type==="appt";
+                    const isDragged = drag?.kind==='reassign' && drag.op===op;
+                    const tx = isDragged ? (drag.pointerX - drag.startX) / drag.scale : 0;
+                    const ty = isDragged ? (drag.pointerY - drag.startY) / drag.scale : 0;
                     return(
-                      <div key={op} ref={cardRefs.current[op]}
+                      <div key={op} data-op={op}
                         className={antsOps.has(op)?"card-ants":""}
                         style={{...S.card,background:cfg.bg,
                           border:antsOps.has(op)?"none":`2px solid ${isOpen||apptOpen?cfg.numColor:cfg.border}`,
-                          boxShadow:(isOpen||apptOpen)&&!isInactive?cfg.glow:status==="awaiting"?"0 0 14px rgba(255,255,255,0.15)":"none",
+                          boxShadow:isDragged?"0 12px 32px rgba(0,0,0,0.6)":(isOpen||apptOpen)&&!isInactive?cfg.glow:status==="awaiting"?"0 0 14px rgba(255,255,255,0.15)":"none",
                           opacity:isInactive?0.4:1,position:"relative",padding:0,overflow:"hidden",
-                          display:"flex",flexDirection:"row",alignItems:"stretch"}}
+                          display:"flex",flexDirection:"row",alignItems:"stretch",
+                          transform: isDragged ? `translate(${tx}px, ${ty}px)` : "none",
+                          transition: isDragged ? "none" : "transform .2s",
+                          zIndex: isDragged ? 1000 : "auto"}}
+                        onMouseDownCapture={e=>{ if(!isInactive) primeDrag('reassign', { op, sourceProvider: name }, e); }}
+                        onTouchStartCapture={e=>{ if(!isInactive) primeDrag('reassign', { op, sourceProvider: name }, e); }}
+                        onMouseMoveCapture={maybePromoteOnMove}
+                        onTouchMoveCapture={maybePromoteOnMove}
+                        onMouseUpCapture={cancelHold}
+                        onTouchEndCapture={cancelHold}
                         onMouseDown={e=>e.stopPropagation()}>
 
                         {/* Left column: op number + elapsed below it */}
                         <button className="num-btn"
-                          onMouseDown={e=>{e.stopPropagation();setMenu(isOpen?null:{op,type:"status"});}}
+                          onMouseDown={e=>e.stopPropagation()}
+                          onClick={e=>{if(consumeDragSuppressedClick(e))return;e.stopPropagation();setMenu(isOpen?null:{op,type:"status"});}}
                           style={{display:"flex",flexDirection:"column",alignItems:"center",
                             justifyContent:"center",padding:"4px 8px",flexShrink:0,
                             background:"transparent",border:"none",cursor:"pointer",gap:"2px"}}>
@@ -1019,7 +1094,8 @@ function MasterTablet(){
 
                             {/* Appt type — each type gets its own fixed-width badge, letters stacked top-to-bottom upright */}
                             <button className="appt-btn"
-                              onMouseDown={e=>{e.stopPropagation();setMenu(apptOpen?null:{op,type:"appt"});}}
+                              onMouseDown={e=>e.stopPropagation()}
+                              onClick={e=>{if(consumeDragSuppressedClick(e))return;e.stopPropagation();setMenu(apptOpen?null:{op,type:"appt"});}}
                               style={{flexShrink:0,background:"transparent",border:"none",
                                 padding:"4px 0",cursor:"pointer",alignSelf:(apptTypes||[]).length>2?"stretch":"center",
                                 display:"grid",gridTemplateColumns:`repeat(${Math.min(Math.max((apptTypes||[]).length,1),2)},${apptW})`,gridAutoRows:"1fr",gap:"2px",minHeight:(apptTypes||[]).length>2?undefined:`calc(${numSz} + ${timSz} + 14px)`}}>
@@ -1057,7 +1133,8 @@ function MasterTablet(){
                             {/* Note — inline editor on card, no modal/overlay needed */}
                             {/* Note display — tap to open editor modal */}
                             <button
-                              onMouseDown={e=>{e.stopPropagation();if(menu){setMenu(null);return;}noteDidSelect.current=false;noteDraftRef.current=note||"";setNoteEdit({op,draft:note});}}
+                              onMouseDown={e=>e.stopPropagation()}
+                              onClick={e=>{if(consumeDragSuppressedClick(e))return;e.stopPropagation();if(menu){setMenu(null);return;}if(noteLocked?.op===op&&noteLocked?.by!=="master"){showMasterToast("🔒 In use");return;}noteDidSelect.current=false;noteDraftRef.current=note||"";setNoteEdit({op,draft:note});emitSocket('noteLock',{op,by:"master"});}}
                               style={{flex:1,textAlign:"left",
                                 padding:0,background:"transparent",border:"none",
                                 cursor:"pointer",alignSelf:"center",minWidth:0,overflow:"hidden",
@@ -1152,7 +1229,7 @@ function MasterTablet(){
 
         {noteEdit && (
           <div style={{position:"absolute",inset:0,background:"rgba(0,0,0,0.75)",backdropFilter:"blur(4px)",zIndex:800,display:"flex",alignItems:"center",justifyContent:"center"}}
-            onMouseDown={()=>{updateNote(noteEdit.op,noteEdit.draft);setNoteEdit(null);}}>
+            onMouseDown={()=>{updateNote(noteEdit.op,noteEdit.draft);emitSocket('noteUnlock',{op:noteEdit.op});setNoteEdit(null);}}>
             <div style={{background:"#16161a",border:"1px solid rgba(255,255,255,0.18)",borderRadius:"16px",padding:"24px",width:"500px",color:"#fff",fontFamily:"'DM Sans',sans-serif"}}
               onMouseDown={e=>e.stopPropagation()}>
               <div style={{fontFamily:"'Bebas Neue',sans-serif",fontSize:"18px",letterSpacing:"0.12em",marginBottom:"16px",color:"rgba(255,255,255,0.5)"}}>
@@ -1163,14 +1240,22 @@ function MasterTablet(){
                 ref={el => { if (el && !noteDidSelect.current) { noteDidSelect.current = true; setTimeout(() => { el.focus(); el.select(); }, 10); } }}
                 value={noteEdit.draft}
                 onChange={e=>setNoteEdit(p=>({...p,draft:e.target.value}))}
+                onKeyDown={e=>{
+                  if(e.key==='Enter'&&!e.shiftKey){
+                    e.preventDefault();
+                    updateNote(noteEdit.op,noteEdit.draft);
+                    emitSocket('noteUnlock',{op:noteEdit.op});
+                    setNoteEdit(null);
+                  }
+                }}
                 placeholder="Enter note..."
                 style={{width:"100%",minHeight:"100px",background:"rgba(255,255,255,0.06)",border:"1px solid rgba(255,255,255,0.2)",borderRadius:"10px",padding:"14px",color:"#fff",fontFamily:"'DM Sans',sans-serif",fontSize:"20px",fontWeight:600,resize:"none",outline:"none",lineHeight:1.4}}
               />
               <div style={{display:"flex",gap:"10px",marginTop:"14px"}}>
                 <button style={{flex:1,padding:"12px",background:"rgba(255,255,255,0.06)",border:"1px solid rgba(255,255,255,0.12)",borderRadius:"8px",color:"rgba(255,255,255,0.5)",fontFamily:"'DM Sans',sans-serif",fontSize:"14px",cursor:"pointer"}}
-                  onMouseDown={()=>setNoteEdit(null)}>Cancel</button>
+                  onMouseDown={()=>{emitSocket('noteUnlock',{op:noteEdit.op});setNoteEdit(null);}}>Cancel</button>
                 <button style={{flex:2,padding:"12px",background:"rgba(96,165,250,0.15)",border:"1px solid rgba(96,165,250,0.4)",borderRadius:"8px",color:"#60a5fa",fontFamily:"'Bebas Neue',sans-serif",fontSize:"18px",letterSpacing:"0.12em",cursor:"pointer"}}
-                  onMouseDown={()=>{updateNote(noteEdit.op,noteEdit.draft);setNoteEdit(null);}}>SAVE</button>
+                  onMouseDown={()=>{updateNote(noteEdit.op,noteEdit.draft);emitSocket('noteUnlock',{op:noteEdit.op});setNoteEdit(null);}}>SAVE</button>
               </div>
             </div>
           </div>
@@ -1296,6 +1381,25 @@ const opData=pendingAssignOps?.[op]||ops[op];
           </div>
         )}
 
+        {/* ── Confirm drag-reassignment popup ── */}
+        {confirmDragMove && (
+          <div style={{position:"absolute",inset:0,background:"rgba(0,0,0,0.85)",backdropFilter:"blur(6px)",zIndex:910,display:"flex",alignItems:"center",justifyContent:"center"}}
+            onMouseDown={()=>setConfirmDragMove(null)}>
+            <div style={{background:"#1e1e26",border:"1px solid rgba(255,160,0,0.4)",borderRadius:"16px",padding:"32px",width:"440px",textAlign:"center",fontFamily:"'DM Sans',sans-serif"}}
+              onMouseDown={e=>e.stopPropagation()}>
+              <div style={{fontSize:"22px",fontWeight:700,color:"#fff",marginBottom:"18px",lineHeight:1.35}}>
+                Move Op {confirmDragMove.op} from {confirmDragMove.from} to {confirmDragMove.to}?
+              </div>
+              <div style={{display:"flex",gap:"12px"}}>
+                <button style={{flex:1,padding:"12px",background:"rgba(255,60,60,0.12)",border:"1px solid rgba(255,60,60,0.5)",borderRadius:"9px",color:"rgba(255,100,100,0.9)",fontFamily:"'Bebas Neue',sans-serif",fontSize:"18px",letterSpacing:"0.12em",cursor:"pointer"}}
+                  onMouseDown={()=>setConfirmDragMove(null)}>DECLINE</button>
+                <button style={{flex:1,padding:"12px",background:"rgba(74,222,128,0.15)",border:"1px solid rgba(74,222,128,0.5)",borderRadius:"9px",color:"#4ade80",fontFamily:"'Bebas Neue',sans-serif",fontSize:"18px",letterSpacing:"0.12em",cursor:"pointer"}}
+                  onMouseDown={commitReassign}>CONFIRM</button>
+              </div>
+            </div>
+          </div>
+        )}
+
         {/* ── Confirm transfer popup ── */}
         {confirmTransfer && (
           <div style={{position:"absolute",inset:0,background:"rgba(0,0,0,0.85)",backdropFilter:"blur(6px)",zIndex:910,display:"flex",alignItems:"center",justifyContent:"center"}}>
@@ -1386,11 +1490,15 @@ const opData=pendingAssignOps?.[op]||ops[op];
         )}
         {showMaster && (
           <MasterMenu
-            statuses={statuses} setStatuses={setStatuses}
-            apptTypes={availableApptTypes} setApptTypes={setAvailableApptTypes}
+            statuses={statuses}
+            setStatuses={(next)=>setStatuses(prev=>{const arr=typeof next==="function"?next(prev):next;emitSocket("setStatuses",{statuses:arr});return arr;})}
+            apptTypes={availableApptTypes}
+            setApptTypes={(next)=>setAvailableApptTypes(prev=>{const arr=typeof next==="function"?next(prev):next;emitSocket("setApptTypes",{apptTypes:arr});return arr;})}
             allOps={allOpsState} setAllOps={setAllOpsState}
-            providers={activeProviders} setProviders={setActiveProviders}
-            inactiveProviders={inactiveProviders} setInactiveProviders={setInactiveProviders}
+            providers={activeProviders}
+            setProviders={(next)=>setActiveProviders(prev=>{const arr=typeof next==="function"?next(prev):next;emitSocket("setProviders",{activeProviders:arr,inactiveProviders});return arr;})}
+            inactiveProviders={inactiveProviders}
+            setInactiveProviders={(next)=>setInactiveProviders(prev=>{const arr=typeof next==="function"?next(prev):next;emitSocket("setProviders",{activeProviders,inactiveProviders:arr});return arr;})}
             onClose={()=>setShowMaster(false)}
             emitSocket={emitSocket}
             setShowHistory={setShowHistory}
@@ -1405,23 +1513,33 @@ const opData=pendingAssignOps?.[op]||ops[op];
             <div style={{fontSize:"11px",letterSpacing:"0.1em",color:"rgba(255,255,255,0.3)",fontFamily:"'DM Sans',sans-serif",marginBottom:"4px"}}>DRAG ↕ TO REORDER URGENCY · STATUS CHANGE REMOVES OP FROM QUEUE</div>
             <div style={{flex:1,overflowY:"auto",display:"flex",flexDirection:"column",gap:"8px"}}>
               {readyOps.length===0 && (<div style={{textAlign:"center",color:"rgba(255,255,255,0.4)",fontFamily:"'DM Sans',sans-serif",padding:"40px"}}>No ops ready</div>)}
-              {readyOps.map(item=>(
+              {readyOps.map(item=>{
+                const isQDragged = drag?.kind==='queue' && drag.itemId===item.op;
+                const qtx = isQDragged ? (drag.pointerX - drag.startX) / drag.scale : 0;
+                const qty = isQDragged ? (drag.pointerY - drag.startY) / drag.scale : 0;
+                return (
                 <div key={item.op} data-queue-item-id={item.op}
-                  onDragEnter={()=>setDragOverId(item.op)} onDragOver={e=>e.preventDefault()}
-                  style={{padding:"16px 20px",background:"rgba(74,222,128,0.08)",border:"1px solid rgba(74,222,128,0.3)",borderRadius:"10px",display:"flex",alignItems:"center",gap:"20px",opacity:dragId===item.op?0.5:1,userSelect:"none"}}>
-                  <div draggable
-                    onDragStart={e=>{e.stopPropagation();setDragId(item.op);}}
-                    onDragEnd={handleQueueDragEnd}
-                    onTouchStart={e=>onTouchHoldStart(item.op,e)}
-                    onTouchMove={e=>onTouchHoldMove(e)}
-                    onTouchEnd={e=>onTouchHoldEnd(e)}
-                    style={{fontSize:"22px",color:"#4ade80",cursor:"grab",touchAction:"none",flexShrink:0,padding:"3px 8px",borderRadius:"4px"}}
-                    title="Drag to reorder">↕</div>
+                  style={{padding:"16px 20px",background:"rgba(74,222,128,0.08)",border:"1px solid rgba(74,222,128,0.3)",borderRadius:"10px",display:"flex",alignItems:"center",gap:"20px",userSelect:"none",
+                    transform: isQDragged ? `translate(${qtx}px, ${qty}px)` : "none",
+                    transition: isQDragged ? "none" : "transform .2s",
+                    boxShadow: isQDragged ? "0 12px 32px rgba(0,0,0,0.6)" : "none",
+                    zIndex: isQDragged ? 1000 : "auto",
+                    // While dragging, ignore pointer hits on the dragged item so
+                    // elementFromPoint can resolve to the item underneath.
+                    pointerEvents: isQDragged ? "none" : "auto",
+                    touchAction: "none"}}
+                  onMouseDownCapture={e=>primeDrag('queue',{itemId:item.op},e)}
+                  onTouchStartCapture={e=>primeDrag('queue',{itemId:item.op},e)}
+                  onMouseMoveCapture={maybePromoteOnMove}
+                  onTouchMoveCapture={maybePromoteOnMove}
+                  onMouseUpCapture={cancelHold}
+                  onTouchEndCapture={cancelHold}>
+                  <div style={{fontSize:"22px",color:"#4ade80",flexShrink:0,padding:"3px 8px",borderRadius:"4px"}} title="Hold to reorder">↕</div>
                   <div style={{fontFamily:"'Bebas Neue',sans-serif",fontSize:"36px",color:"#4ade80",letterSpacing:"0.05em",minWidth:"60px"}}>OP {item.op}</div>
                   <div style={{flex:1,fontFamily:"'DM Sans',sans-serif",fontSize:"16px",color:"#fff"}}>{ops[item.op]?.provider||""}</div>
                   {item.ts && (<div style={{fontSize:"14px",color:"rgba(255,255,255,0.5)",fontFamily:"'Bebas Neue',sans-serif",letterSpacing:"0.1em"}}>{Math.floor((Date.now()-new Date(item.ts).getTime())/60000)}m</div>)}
-                </div>
-              ))}
+                </div>);
+              })}
             </div>
           </div>
         )}
@@ -1436,18 +1554,6 @@ const opData=pendingAssignOps?.[op]||ops[op];
             </div>
           </div>
         )}
-        {dragId!==null && touchPos && (()=>{
-          const draggedItem=readyOps.find(o=>o.op===dragId);
-          if(!draggedItem)return null;
-          return (
-            <div style={{position:"fixed",left:touchPos.x-grabOffset.current.x,top:touchPos.y-grabOffset.current.y,pointerEvents:"none",zIndex:1000,opacity:0.9,width:"360px"}}>
-              <div style={{borderRadius:"10px",border:"2px solid #4ade80",background:"rgba(74,222,128,0.15)",boxShadow:"0 16px 40px rgba(74,222,128,0.6), 0 0 32px rgba(74,222,128,0.7)",padding:"10px 16px",display:"flex",alignItems:"center",gap:"12px"}}>
-                <div style={{fontFamily:"'Bebas Neue',sans-serif",fontSize:"36px",lineHeight:1,color:"#4ade80"}}>Op {draggedItem.op}</div>
-                <div style={{fontFamily:"'DM Sans',sans-serif",fontSize:"16px",color:"#fff",flex:1,minWidth:0,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>{ops[draggedItem.op]?.provider||""}</div>
-              </div>
-            </div>
-          );
-        })()}
     </ScaledWrapper>
   );
 }
@@ -1482,3 +1588,4 @@ const css=`
   @keyframes antsMarch{to{background-position:100% 0,0 100%,0 0,100% 100%;}}
   .card-ants{background-image:repeating-linear-gradient(90deg,#fff 0,#fff 8px,transparent 8px,transparent 16px),repeating-linear-gradient(90deg,#fff 0,#fff 8px,transparent 8px,transparent 16px),repeating-linear-gradient(0deg,#fff 0,#fff 8px,transparent 8px,transparent 16px),repeating-linear-gradient(0deg,#fff 0,#fff 8px,transparent 8px,transparent 16px)!important;background-size:200% 2px,200% 2px,2px 200%,2px 200%!important;background-position:0 0,0 100%,0 0,100% 0!important;background-repeat:no-repeat!important;animation:antsMarch 0.6s linear infinite!important;border:none!important;}
 `;
+
