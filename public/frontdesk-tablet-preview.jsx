@@ -1321,7 +1321,7 @@ const css=`
   
   .popup-awfa{animation:popupFlashAwfa 2.5s ease-in-out infinite,slideIn .4s ease;}
   .popup-rdy{animation:popupFlashRdy 2.5s ease-in-out infinite,slideIn .4s ease;}
-  @keyframes popupFlashAwfa{0%,100%{background:#ff69b4;}50%{background:#3d0a20;}}
+  @keyframes popupFlashAwfa{0%,100%{background:#c94785;}50%{background:#3d0a20;}}
   @keyframes popupFlashRdy{0%,100%{background:#4ade80;}50%{background:#052210;}}
   @keyframes slideIn{from{opacity:0;transform:scale(0.92);}to{opacity:1;transform:scale(1);}}
 `;
