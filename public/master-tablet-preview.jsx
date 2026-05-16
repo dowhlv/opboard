@@ -450,7 +450,7 @@ function MasterMenu({ statuses, setStatuses, apptTypes, setApptTypes, allOps, se
           onMouseDown={e=>e.stopPropagation()}>
           <Back/>
           <div style={{fontFamily:"'Bebas Neue',sans-serif",fontSize:"20px",letterSpacing:"0.12em",color:"#fff",marginBottom:"16px"}}>⊟ EDIT OPS</div>
-          <div style={{fontSize:"12px",color:"rgba(255,255,255,0.35)",marginBottom:"14px"}}>Toggle ops on/off. Disabled ops won't appear in Assign Ops.</div>
+          <div style={{fontSize:"12px",color:"rgba(255,255,255,0.35)",marginBottom:"14px"}}>Toggle ops on/off. Disabled ops won't appear in Assignments.</div>
           <div style={{display:"flex",flexWrap:"wrap",gap:"10px"}}>
             {allOps.map(({id,enabled})=>(
               <button key={id} onMouseDown={()=>{
@@ -1177,7 +1177,7 @@ function MasterTablet(){
               <line x1="12" y1="2" x2="12" y2="6"/><line x1="12" y1="18" x2="12" y2="22"/>
               <line x1="2" y1="12" x2="6" y2="12"/><line x1="18" y1="12" x2="22" y2="12"/>
             </svg>
-            ASSIGN OPS
+            ASSIGNMENTS
           </button>
           <button onMouseDown={e=>{e.stopPropagation();setMenu(null);setShowMaster(true);}}
             style={{position:"absolute",bottom:"10px",right:"16px",background:"rgba(255,255,255,0.06)",border:"1px solid rgba(255,255,255,0.12)",borderRadius:"8px",padding:"8px 12px",cursor:"pointer",color:"rgba(255,255,255,0.5)",fontSize:"20px",lineHeight:1}}>≡</button>
@@ -1279,7 +1279,7 @@ function MasterTablet(){
           </div>
         )}
 
-        {/* ── Assign Rooms Modal ── */}
+        {/* ── Assignments Modal ── */}
         {showAssign && !confirmProvider && (
           <div style={{position:"fixed",inset:0,background:"rgba(0,0,0,0.8)",backdropFilter:"blur(4px)",zIndex:800,display:"flex",alignItems:"center",justifyContent:"center"}}
             onMouseDown={()=>setShowAssign(false)}>
@@ -1287,7 +1287,7 @@ function MasterTablet(){
               onMouseDown={e=>e.stopPropagation()}>
               <div style={{fontFamily:"'Bebas Neue',sans-serif",fontSize:"20px",letterSpacing:"0.12em",marginBottom:"12px",display:"flex",alignItems:"center",gap:"10px",flexShrink:0}}>
                 <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><circle cx="12" cy="12" r="10"/><circle cx="12" cy="12" r="6"/><circle cx="12" cy="12" r="2"/><line x1="12" y1="2" x2="12" y2="6"/><line x1="12" y1="18" x2="12" y2="22"/><line x1="2" y1="12" x2="6" y2="12"/><line x1="18" y1="12" x2="22" y2="12"/></svg>
-                ASSIGN OPS
+                ASSIGNMENTS
               </div>
 
               {/* Active Providers */}
@@ -1420,10 +1420,10 @@ const opData=pendingAssignOps?.[op]||ops[op];
                 <button style={{flex:1,padding:"12px",background:"rgba(74,222,128,0.15)",border:"1px solid rgba(74,222,128,0.5)",borderRadius:"9px",color:"#4ade80",fontFamily:"'Bebas Neue',sans-serif",fontSize:"18px",letterSpacing:"0.12em",cursor:"pointer"}}
                   onMouseDown={()=>{
                     const{op,toProvider}=confirmTransfer;
-                    setPendingAssignOps(prev=>{
-                      const base=prev||{...ops};
-                      return{...base,[op]:{...base[op],provider:toProvider,status:"awaiting",apptTypes:[],note:"",ts:new Date()}};
-                    });
+                    const updated={...(ops[op]||{}),provider:toProvider,status:"awaiting",apptTypes:[],note:"",ts:new Date()};
+                    setOps(prev=>({...prev,[op]:updated}));
+                    emitSocket('setOpProvider',{op:Number(op),provider:toProvider,status:'awaiting',apptTypes:[],note:''});
+                    setPendingAssignOps(prev=>({...(prev||{...ops}),[op]:updated}));
                     setConfirmTransfer(null);
                   }}>CONFIRM</button>
               </div>
@@ -1451,9 +1451,22 @@ const opData=pendingAssignOps?.[op]||ops[op];
                   onMouseDown={()=>{
                     const {name, action} = confirmProvider;
                     if(action==="inactivate"){
-                      setPendingActiveProviders(prev=>(prev||activeProviders).filter(p=>p!==name));
-                      setPendingInactiveProviders(prev=>[...(prev||inactiveProviders),name]);
-                      // Draft-unassign all ops from this provider
+                      const newActive=activeProviders.filter(p=>p!==name);
+                      const newInactive=[...inactiveProviders,name];
+                      setActiveProviders(newActive);
+                      setInactiveProviders(newInactive);
+                      emitSocket('setProviders',{activeProviders:newActive,inactiveProviders:newInactive});
+                      // Immediately unassign all live ops held by this provider, and broadcast
+                      Object.keys(ops).forEach(op=>{
+                        if(ops[op]?.provider===name){
+                          const updated={...ops[op],provider:null};
+                          setOps(prev=>({...prev,[op]:updated}));
+                          emitSocket('setOpProvider',{op:Number(op),provider:null,status:updated.status||'awaiting',apptTypes:updated.apptTypes||[],note:updated.note||''});
+                        }
+                      });
+                      // Mirror to pending so other unconfirmed pending edits remain coherent
+                      setPendingActiveProviders(newActive);
+                      setPendingInactiveProviders(newInactive);
                       setPendingAssignOps(prev=>{
                         const base=prev||{...ops};
                         const updated={...base};
@@ -1465,8 +1478,13 @@ const opData=pendingAssignOps?.[op]||ops[op];
                         return updated;
                       });
                     } else {
-                      setPendingInactiveProviders(prev=>(prev||inactiveProviders).filter(p=>p!==name));
-                      setPendingActiveProviders(prev=>[...(prev||activeProviders),name]);
+                      const newInactive=inactiveProviders.filter(p=>p!==name);
+                      const newActive=[...activeProviders,name];
+                      setActiveProviders(newActive);
+                      setInactiveProviders(newInactive);
+                      emitSocket('setProviders',{activeProviders:newActive,inactiveProviders:newInactive});
+                      setPendingActiveProviders(newActive);
+                      setPendingInactiveProviders(newInactive);
                     }
                     setConfirmProvider(null);
                   }}>CONFIRM</button>
