@@ -237,9 +237,18 @@ io.on('connection', socket => {
     if(!isValidOp(op)) return;
     if(!state.ops[op]) state.ops[op]={provider:null,status:'awaiting',apptTypes:[],note:'',ts:null,noteUpdatedAt:null};
     state.ops[op].provider=provider;
-    if(status!==undefined) state.ops[op].status=status;
-    if(apptTypes!==undefined) state.ops[op].apptTypes=Array.isArray(apptTypes)?apptTypes:[];
-    if(note!==undefined) state.ops[op].note=note;
+    if(provider===null){
+      // An op without a provider has no work state — force-reset so stale
+      // status/apptTypes/note/popup-dismissal don't trigger phantom notifications.
+      state.ops[op].status='awaiting';
+      state.ops[op].apptTypes=[];
+      state.ops[op].note='';
+      delete state.readyPopupDismissed[op];
+    } else {
+      if(status!==undefined) state.ops[op].status=status;
+      if(apptTypes!==undefined) state.ops[op].apptTypes=Array.isArray(apptTypes)?apptTypes:[];
+      if(note!==undefined) state.ops[op].note=note;
+    }
     state.ops[op].ts=Date.now();
     saveState();
     broadcastState();

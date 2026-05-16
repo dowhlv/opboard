@@ -1456,12 +1456,13 @@ const opData=pendingAssignOps?.[op]||ops[op];
                       setActiveProviders(newActive);
                       setInactiveProviders(newInactive);
                       emitSocket('setProviders',{activeProviders:newActive,inactiveProviders:newInactive});
-                      // Immediately unassign all live ops held by this provider, and broadcast
+                      // Immediately unassign all live ops held by this provider, and broadcast.
+                      // Reset status/apptTypes/note so stale state doesn't keep firing READY/AWFA popups.
                       Object.keys(ops).forEach(op=>{
                         if(ops[op]?.provider===name){
-                          const updated={...ops[op],provider:null};
+                          const updated={...ops[op],provider:null,status:'awaiting',apptTypes:[],note:''};
                           setOps(prev=>({...prev,[op]:updated}));
-                          emitSocket('setOpProvider',{op:Number(op),provider:null,status:updated.status||'awaiting',apptTypes:updated.apptTypes||[],note:updated.note||''});
+                          emitSocket('setOpProvider',{op:Number(op),provider:null,status:'awaiting',apptTypes:[],note:''});
                         }
                       });
                       // Mirror to pending so other unconfirmed pending edits remain coherent
