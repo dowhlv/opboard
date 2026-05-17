@@ -25,6 +25,22 @@ if (!fs.existsSync(HISTORY_DIR)) {
 
 // Load persisted state on startup
 // IMPORTANT: merge saved data INTO defaults so new fields always have defaults
+// Move a corrupt persisted file out of the way so it isn't overwritten on the
+// next save. Returns true on rename success. Stays silent if the file is gone.
+function preserveCorruptFile(path, kind) {
+  try {
+    if (!fs.existsSync(path)) return false;
+    const corruptPath = path + '.' + kind + '.' + new Date().toISOString().replace(/[:.]/g, '-') + '.json';
+    fs.renameSync(path, corruptPath);
+    console.error(`=> ${path} ${kind} — renamed to ${corruptPath}`);
+    return true;
+  } catch (renameErr) {
+    console.error(`=> ${path} ${kind} AND COULD NOT BE RENAMED:`, renameErr.message);
+    console.error('   Original file may be overwritten on next save.');
+    return false;
+  }
+}
+
 function loadState() {
   try {
     if (fs.existsSync(STATE_FILE)) {
@@ -58,17 +74,30 @@ function loadState() {
         }
         console.log(`State restored: ${Object.keys(state.ops).length} ops, ${(state.history||[]).length} history entries`);
       } else {
-        console.log('Invalid/empty state file — using defaults');
+        // Parsed but the shape is unexpected (e.g. ops missing or not an object).
+        // Preserve the file so a human can recover whatever's in it.
+        console.error('═════════════════════════════════════════════════════════');
+        console.error('STATE FILE HAS INVALID SHAPE (ops missing or not an object).');
+        preserveCorruptFile(STATE_FILE, 'invalid');
+        console.error('Booting with defaults. Recover manually from the renamed file.');
+        console.error('═════════════════════════════════════════════════════════');
       }
     }
   } catch(e) {
     if (e.code === 'EACCES' || e.code === 'EPERM') {
+      // Can't read the file — don't try to rename it either. Just log and boot defaults.
       console.error('PERMISSION ERROR reading state file. Check /var/lib/opboard permissions.');
       console.error('Run: sudo chown actang13:actang13 /var/lib/opboard');
     } else if (e.code === 'ENOENT') {
       console.log('No state file found — starting fresh with defaults');
     } else {
-      console.error('Could not load state, using defaults:', e.code, e.message);
+      // JSON parse error or other unexpected failure. Preserve the corrupt file
+      // before saveState gets a chance to overwrite it with defaults.
+      console.error('═════════════════════════════════════════════════════════');
+      console.error('STATE FILE CORRUPT —', e.code || e.name, '—', e.message);
+      preserveCorruptFile(STATE_FILE, 'corrupt');
+      console.error('Booting with defaults. Recover manually from the renamed file.');
+      console.error('═════════════════════════════════════════════════════════');
     }
   }
 }
@@ -92,7 +121,14 @@ function logHistory(op, status, apptTypes, provider) {
   try {
     let history = [];
     if (fs.existsSync(HISTORY_FILE)) {
-      try { history = JSON.parse(fs.readFileSync(HISTORY_FILE, 'utf8')); } catch(e) {}
+      try {
+        history = JSON.parse(fs.readFileSync(HISTORY_FILE, 'utf8'));
+      } catch(e) {
+        // Don't silently overwrite a corrupt history file — preserve it for recovery.
+        console.error('HISTORY FILE CORRUPT —', e.code || e.name, '—', e.message);
+        preserveCorruptFile(HISTORY_FILE, 'corrupt');
+        history = [];
+      }
     }
     history.push({ ts: Date.now(), op: parseInt(op), status, apptTypes: apptTypes||[], provider });
     const tmp = HISTORY_FILE + '.tmp';

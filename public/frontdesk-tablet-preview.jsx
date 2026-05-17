@@ -117,6 +117,11 @@ const DEMO={1:{status:"ready",note:"New patient",ts:new Date(Date.now()-120000),
   13:{status:"awaiting", note:"",               ts:new Date(Date.now()-90000),   apptTypes:[],  provider:"Jordan"  },14:{status:"fa",note:"Whitening",ts:new Date(Date.now()-600000),apptTypes:["LOE"],provider:"Jordan"}};
 const PROVIDERS=["Dr. Tang","Dr. Ngo","Jordan"];
 const INIT_ALL_OPS = Object.keys(DEMO).map(Number).map(id=>({id,enabled:true}));
+// 10-minute "stuck" reminder configuration, used by both the periodic check
+// effect and the inline reminder-dismiss onClick. Must be module-scope so both
+// callsites resolve to the same binding.
+const REMINDER_STATUSES = ['pending']; // FD only reminders for AWFA
+const REMINDER_MS = 10 * 60 * 1000;
 
 // Server version snapshot at first state broadcast. A subsequent mismatch
 // triggers location.reload() so deploys propagate to all open tablets.
@@ -815,8 +820,6 @@ const APPT_ABBR_MAP={"NP":"NP","CCX":"CCX","Tx":"TX","LOE":"LOE","Delivery":"DEL
   // Chime only fires when the active stuck set grows (transition), not on every tick.
   const prevStuckKeysRef = useRef(new Set());
   useEffect(()=>{
-    const REMINDER_STATUSES = ['pending']; // FD only reminders for AWFA
-    const REMINDER_MS = 10 * 60 * 1000;
     const check = () => {
       const now = Date.now();
       const stuckOps = ALL_OPS.filter(op => {
@@ -1112,14 +1115,13 @@ const APPT_ABBR_MAP={"NP":"NP","CCX":"CCX","Tx":"TX","LOE":"LOE","Delivery":"DEL
               onClick={()=>{
                 const newDismissed=new Set([...dismissedReminders,reminderKey]);
                 setDismissedReminders(newDismissed);
-                // Immediately find next stuck op
-                // REMINDER_STATUSES already defined above (AWFA only)
+                // Immediately find next stuck op (REMINDER_STATUSES + REMINDER_MS are module-scope)
                 const next=ALL_OPS.find(op=>{
                   const d=ops[op];
                   if(!d||!REMINDER_STATUSES.includes(d.status))return false;
                   const k=`${op}-${d.status}-${d.ts}`;
                   if(newDismissed.has(k))return false;
-                  return d.ts&&(Date.now()-new Date(d.ts).getTime())>10*60*1000;
+                  return d.ts&&(Date.now()-new Date(d.ts).getTime())>REMINDER_MS;
                 });
                 if(next){const d=ops[next];setReminder({op:next,status:d.status,ts:d.ts});}
                 else setReminder(null);
@@ -1282,7 +1284,7 @@ const APPT_ABBR_MAP={"NP":"NP","CCX":"CCX","Tx":"TX","LOE":"LOE","Delivery":"DEL
       </div>
         {currentAwfaPopup && (
           <div onMouseDown={dismissAwfaPopup}
-            style={{position:"absolute",inset:0,background:"rgba(0,0,0,0.78)",backdropFilter:"blur(4px)",zIndex:900,display:"flex",alignItems:"center",justifyContent:"center",cursor:"pointer"}}>
+            style={{position:"absolute",inset:0,background:"rgba(10,10,12,0.55)",backdropFilter:"blur(4px)",zIndex:900,display:"flex",alignItems:"center",justifyContent:"center",cursor:"pointer"}}>
             <div style={{padding:"60px 80px",borderRadius:"24px",background:"rgba(255,105,180,0.18)",border:"3px solid #ff69b4",boxShadow:"0 0 80px rgba(255,105,180,0.6)",textAlign:"center",fontFamily:"'Bebas Neue',sans-serif"}}>
               <div style={{fontSize:"72px",letterSpacing:"0.15em",color:"#ff69b4",lineHeight:1,marginBottom:"24px"}}>AWAITING FA</div>
               <div style={{fontSize:"96px",letterSpacing:"0.1em",color:"#fff",lineHeight:1,marginBottom:"32px"}}>OP {currentAwfaPopup.op}</div>

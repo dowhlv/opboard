@@ -634,7 +634,7 @@ function TVDisplay() {
         </div>
       </div>
         {currentReadyPopup && (
-          <div style={{position:"absolute",inset:0,background:"rgba(0,0,0,0.78)",backdropFilter:"blur(4px)",zIndex:900,display:"flex",alignItems:"center",justifyContent:"center"}}>
+          <div style={{position:"absolute",inset:0,background:"rgba(10,10,12,0.55)",backdropFilter:"blur(4px)",zIndex:900,display:"flex",alignItems:"center",justifyContent:"center"}}>
             <div style={{padding:"60px 100px",borderRadius:"24px",background:"rgba(74,222,128,0.18)",border:"3px solid #4ade80",boxShadow:"0 0 80px rgba(74,222,128,0.6)",textAlign:"center",fontFamily:"'Bebas Neue',sans-serif",minWidth:"480px"}}>
               <div style={{fontSize:"72px",letterSpacing:"0.15em",color:"#4ade80",lineHeight:1,marginBottom:"24px"}}>READY</div>
               <div style={{fontSize:"96px",letterSpacing:"0.1em",color:"#fff",lineHeight:1}}>OP {currentReadyPopup.op}</div>
