@@ -182,6 +182,54 @@ function isValidOp(op) {
   return Array.isArray(state.allOps) && state.allOps.some(o => o.id === n);
 }
 
+// Invariant: provider===null implies status='awaiting', empty apptTypes, empty note,
+// and no readyPopupDismissed entry. Call at the tail of every op-mutation handler
+// so no code path can leave an op in a "zombie" state that fires phantom popups.
+function enforceOpInvariant(op) {
+  const o = state.ops[op];
+  if (!o || o.provider !== null) return;
+  o.status = 'awaiting';
+  o.apptTypes = [];
+  o.note = '';
+  delete state.readyPopupDismissed[op];
+}
+
+// One-shot at boot: heal any pre-existing zombies in persisted state and prune
+// stale references in readyPopupDismissed / queueOrder. Self-healing safety net.
+function cleanupOnStartup() {
+  const zombieOps = [];
+  Object.keys(state.ops).forEach(op => {
+    const o = state.ops[op];
+    if (!o || o.provider !== null) return;
+    const isZombie = o.status !== 'awaiting'
+      || (Array.isArray(o.apptTypes) && o.apptTypes.length > 0)
+      || (o.note !== '' && o.note != null);
+    if (isZombie) {
+      zombieOps.push(op);
+      enforceOpInvariant(op);
+    }
+  });
+  let popupDropped = 0;
+  Object.keys(state.readyPopupDismissed).forEach(op => {
+    const o = state.ops[op];
+    if (!o || o.provider === null || o.status !== 'ready') {
+      delete state.readyPopupDismissed[op];
+      popupDropped++;
+    }
+  });
+  let queueDropped = 0;
+  if (Array.isArray(state.queueOrder)) {
+    const before = state.queueOrder.length;
+    state.queueOrder = state.queueOrder.filter(op => state.ops[op] && state.ops[op].provider !== null);
+    queueDropped = before - state.queueOrder.length;
+  }
+  if (zombieOps.length || popupDropped || queueDropped) {
+    console.log(`[startup] Cleaned ${zombieOps.length} zombie op states${zombieOps.length?` (ops ${zombieOps.join(', ')})`:''}, ${popupDropped} stale readyPopupDismissed, ${queueDropped} stale queueOrder`);
+    saveState();
+  }
+}
+cleanupOnStartup();
+
 // Normalize ts values for broadcast — always send as numbers
 function broadcastState(){
   const normalized={...state,ops:{},version:SERVER_VERSION};
@@ -215,13 +263,15 @@ io.on('connection', socket => {
     state.ops[op].status = status;
     state.ops[op].ts = Date.now();
     if(['awaiting','inactive'].includes(status)){ state.ops[op].apptTypes=[]; state.ops[op].note=''; }
-    logHistory(op, status, state.ops[op].apptTypes, state.ops[op].provider);
+    enforceOpInvariant(op);
+    logHistory(op, state.ops[op].status, state.ops[op].apptTypes, state.ops[op].provider);
     saveState();
     broadcastState();
   });
   socket.on('setApptType', ({op,apptTypes}) => {
     if(!isValidOp(op) || !state.ops[op]) return;
     state.ops[op].apptTypes = Array.isArray(apptTypes) ? apptTypes : [];
+    enforceOpInvariant(op);
     saveState();
     broadcastState();
   });
@@ -229,6 +279,7 @@ io.on('connection', socket => {
     if(!isValidOp(op) || !state.ops[op]) return;
     state.ops[op].note = note;
     state.ops[op].noteUpdatedAt = Date.now();
+    enforceOpInvariant(op);
     saveState();
     broadcastState();
   });
@@ -237,19 +288,11 @@ io.on('connection', socket => {
     if(!isValidOp(op)) return;
     if(!state.ops[op]) state.ops[op]={provider:null,status:'awaiting',apptTypes:[],note:'',ts:null,noteUpdatedAt:null};
     state.ops[op].provider=provider;
-    if(provider===null){
-      // An op without a provider has no work state — force-reset so stale
-      // status/apptTypes/note/popup-dismissal don't trigger phantom notifications.
-      state.ops[op].status='awaiting';
-      state.ops[op].apptTypes=[];
-      state.ops[op].note='';
-      delete state.readyPopupDismissed[op];
-    } else {
-      if(status!==undefined) state.ops[op].status=status;
-      if(apptTypes!==undefined) state.ops[op].apptTypes=Array.isArray(apptTypes)?apptTypes:[];
-      if(note!==undefined) state.ops[op].note=note;
-    }
+    if(status!==undefined) state.ops[op].status=status;
+    if(apptTypes!==undefined) state.ops[op].apptTypes=Array.isArray(apptTypes)?apptTypes:[];
+    if(note!==undefined) state.ops[op].note=note;
     state.ops[op].ts=Date.now();
+    enforceOpInvariant(op);
     saveState();
     broadcastState();
   });
@@ -266,9 +309,12 @@ io.on('connection', socket => {
     // Single-field update: changes provider only. Preserves ts, status,
     // apptTypes, note, noteUpdatedAt — used by the drag-reassign UX where
     // the op keeps its place in queues and keeps every other piece of state.
+    // The invariant still applies: if a client passes provider=null, the
+    // op is reset (no zombie state).
     if (!isValidOp(op)) return;
     if (!state.ops[op]) return;
     state.ops[op].provider = provider;
+    enforceOpInvariant(op);
     saveState();
     broadcastState();
   });
