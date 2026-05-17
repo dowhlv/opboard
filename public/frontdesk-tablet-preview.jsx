@@ -453,11 +453,13 @@ function FrontDeskTablet(){
   const[,setTick]=useState(0);
   const[noteEdit,setNoteEdit]=useState(null);
   const fdNoteTimeoutRef=useRef(null);
-  const resetFDNoteTimeout=()=>{
+  const resetFDNoteTimeout=(op)=>{
     clearTimeout(fdNoteTimeoutRef.current);
     fdNoteTimeoutRef.current=setTimeout(()=>{
-      // Auto-close without saving — original note in ops state is unchanged
-      emitSocket('noteUnlock',{});
+      // Auto-close without saving — original note in ops state is unchanged.
+      // Emit unlock for THIS op only; a no-op broadcast would erroneously clear lock
+      // indicators other clients hold for unrelated ops.
+      emitSocket('noteUnlock',{op});
       setNoteEdit(null);
     },30000);
   };
@@ -468,9 +470,13 @@ function FrontDeskTablet(){
   const[showHistory,setShowHistory]=useState(false);
   const[reminder,setReminder]=useState(null);
   const[dismissedReminders,setDismissedReminders]=useState(new Set()); // {op-status-ts} keys
-  const[awfaPopupDismissed,setAwfaPopupDismissed]=useState({}); // {op:timestamp_ms}
+  const[awfaPopupDismissed,setAwfaPopupDismissed]=useState({}); // hydrated from server broadcast; mirrors readyPopupDismissed semantics
   const[popupTick,setPopupTick]=useState(0);
   const soundTimer=useRef(null);
+  // Suppress the AWFA chime on the first state broadcast — refreshing the FD
+  // tablet while ops are already AWFA shouldn't fire an alarm. Seed prevLen from
+  // the initial snapshot so the subsequent chime effect sees no growth.
+  const firstStateProcessedRef=useRef(false);
   const toastRef=useRef(null);
 
   const showToast=msg=>{setToast(msg);clearTimeout(toastRef.current);toastRef.current=setTimeout(()=>setToast(null),2000);};
@@ -489,12 +495,20 @@ function FrontDeskTablet(){
       if(state.customAbbrevs) setCustomAbbrevs(state.customAbbrevs);
       if(state.activeProviders) setActiveProviders(state.activeProviders);
       if(Array.isArray(state.queueOrder)) setQueueOrder(state.queueOrder);
+      if(state.awfaPopupDismissed) setAwfaPopupDismissed(state.awfaPopupDismissed);
       if(state.ops) setOps(prev=>{        const merged={...prev};
         Object.keys(state.ops).forEach(k=>{
           merged[k]={...state.ops[k],ts:state.ops[k].ts?new Date(state.ops[k].ts):null,noteUpdatedAt:state.ops[k].noteUpdatedAt||null};
         });
         return merged;
       });
+      // Fix 5: seed prevLen from first state so refresh-with-AWFA doesn't chime
+      if(!firstStateProcessedRef.current && state.allOps && state.ops){
+        firstStateProcessedRef.current=true;
+        const enabledIds=state.allOps.filter(o=>o.enabled).map(o=>o.id);
+        const initialAwfaCount=enabledIds.filter(op=>state.ops[op]?.provider && state.ops[op]?.status==='pending').length;
+        prevLen.current=initialAwfaCount;
+      }
       setLastUpdated(new Date());
     };
     socket.on('noteLock',({op,by})=>setNoteLocked({op,by}));
@@ -596,19 +610,19 @@ const APPT_ABBR_MAP={"NP":"NP","CCX":"CCX","Tx":"TX","LOE":"LOE","Delivery":"DEL
   const currentAwfaPopup=awfaPopupQueue[0]||null;
   const dismissAwfaPopup=()=>{
     if(!currentAwfaPopup)return;
-    setAwfaPopupDismissed(d=>({...d,[currentAwfaPopup.op]:Date.now()}));
+    emitSocket('dismissAwfaPopup',{op:currentAwfaPopup.op});
   };
-  // Clear dismissal when op leaves AWFA status (fresh popup on re-entry)
+  // Clear server-side dismissal when an op leaves AWFA status (fresh popup on re-entry).
+  // Use a stable string dep so this fires only when the AWFA set changes, not every render.
+  const awfaOpsKey = awfaOps.join('-');
   useEffect(()=>{
-    setAwfaPopupDismissed(d=>{
-      const next={...d};
-      let changed=false;
-      Object.keys(next).forEach(op=>{
-        if(ops[op]?.status!=='pending'){delete next[op];changed=true;}
-      });
-      return changed?next:d;
+    Object.keys(awfaPopupDismissed).forEach(op=>{
+      if(ops[op]?.status!=='pending'){
+        emitSocket('clearAwfaPopupDismissed',{op:Number(op)});
+      }
     });
-  },[ops]);
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  },[awfaOpsKey]);
 
   // Sound when new ops enter queue
   useEffect(()=>{
@@ -1038,7 +1052,7 @@ const APPT_ABBR_MAP={"NP":"NP","CCX":"CCX","Tx":"TX","LOE":"LOE","Delivery":"DEL
                                 e.stopPropagation();
                                 if(menu){setMenu(null);return;}
                                 if(noteLocked?.op===op&&noteLocked?.by!=="frontdesk"){showToast("🔒 In use");return;}
-                                setNoteEdit({op,draft:note||""});emitSocket("noteLock",{op,by:"frontdesk"});resetFDNoteTimeout();}}
+                                setNoteEdit({op,draft:note||""});emitSocket("noteLock",{op,by:"frontdesk"});resetFDNoteTimeout(op);}}
                               style={{flex:1,textAlign:"left",padding:0,background:"transparent",
                                 border:"none",cursor:"pointer",alignSelf:"center",minWidth:0,
                                 overflow:"hidden",display:"flex",alignItems:"center"}}>
@@ -1173,7 +1187,7 @@ const APPT_ABBR_MAP={"NP":"NP","CCX":"CCX","Tx":"TX","LOE":"LOE","Delivery":"DEL
                 <button onMouseDown={()=>{
                   setOps(p=>({...p,[noteEdit.op]:{...p[noteEdit.op],note:noteEdit.draft,noteUpdatedAt:new Date()}}));
                   emitSocket('setNote',{op:noteEdit.op,note:noteEdit.draft});
-                  emitSocket('noteUnlock',{});
+                  emitSocket('noteUnlock',{op:noteEdit.op});
                   clearTimeout(fdNoteTimeoutRef.current);
                   setNoteEdit(null);
                 }}

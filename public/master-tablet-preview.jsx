@@ -935,7 +935,10 @@ function MasterTablet(){
   const fmtTime=d=>{let h=d.getHours(),m=d.getMinutes(),ap=h>=12?"PM":"AM";h=h%12||12;return`${h}:${String(m).padStart(2,"0")} ${ap}`;};
 
   const setStatus=useCallback((op,key)=>{
-  setOps(p=>({...p,[op]:{...p[op],status:key,ts:key==="inactive"?null:new Date()}}));
+  const shouldClear=['awaiting','inactive'].includes(key);
+  setOps(p=>({...p,[op]:{...p[op],status:key,ts:key==="inactive"?null:new Date(),
+    apptTypes:shouldClear?[]:p[op]?.apptTypes,
+    note:shouldClear?'':p[op]?.note}}));
   emitSocket('setStatus',{op,status:key});
   setAntsOps(prev=>{const n=new Set(prev);n.delete(op);return n;});
   setMenu(null);

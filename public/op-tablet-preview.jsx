@@ -99,6 +99,7 @@ function OpTablet(){
   const[isOnline,setIsOnline]=useState(true);
   const[availableApptTypes,setAvailableApptTypes]=useState(DEFAULT_APPT_TYPES);
   const[statuses,setStatuses]=useState(STATUSES);
+  const[allOpsState,setAllOpsState]=useState([]);
   const toastRef=useRef(null);
   const noteTimeoutRef=useRef(null);
 
@@ -117,6 +118,7 @@ function OpTablet(){
       }
       if(state.apptTypes)setAvailableApptTypes(state.apptTypes);
       if(state.statuses)setStatuses(state.statuses);
+      if(state.allOps)setAllOpsState(state.allOps);
       if(state.ops&&state.ops[OP_NUMBER]){
         const d=state.ops[OP_NUMBER];
         setOp(prev=>({...prev,...d,ts:d.ts?new Date(d.ts):null,apptTypes:Array.isArray(d.apptTypes)?d.apptTypes:[]}));
@@ -165,6 +167,24 @@ function OpTablet(){
   const isLight=op.status==='awaiting';
   const textCol=isLight?'#111114':cfg.numColor;
   const cardAnim=(op.status==='ready'||op.status==='pending')?' slowPulse 2.5s ease-in-out infinite':'none';
+
+  // Overlay: this tablet can't be used if the op is disabled or has no provider.
+  // Default isEnabled=true pre-broadcast so we don't flash the overlay on mount.
+  const opMeta=allOpsState.find(o=>o.id===OP_NUMBER);
+  const isEnabled=opMeta?opMeta.enabled:true;
+  const overlay = !isEnabled ? 'disabled' : (op.provider==null ? 'no_provider' : null);
+
+  // When overlay activates, close any open modals and release any note lock.
+  useEffect(()=>{
+    if(!overlay) return;
+    setShowStatusModal(false);
+    setShowApptModal(false);
+    if(noteEdit){
+      clearTimeout(noteTimeoutRef.current);
+      if(typeof socket!=='undefined') socket.emit('noteUnlock',{op:OP_NUMBER});
+      setNoteEdit(null);
+    }
+  },[overlay]);
   const fmtTime=d=>{let h=d.getHours(),m=d.getMinutes(),ap=h>=12?'PM':'AM';h=h%12||12;return`${h}:${String(m).padStart(2,'0')} ${ap}`;};
   const fmtDate=d=>`${d.getMonth()+1}/${d.getDate()}/${d.getFullYear()}`;
 
@@ -408,6 +428,29 @@ function OpTablet(){
             fontSize:'18px',letterSpacing:'0.12em',color:'#4ade80',whiteSpace:'nowrap',
             zIndex:300,boxShadow:'0 0 20px rgba(74,222,128,0.3)',pointerEvents:'none'}}>
             {toast}
+          </div>
+        )}
+
+        {/* ── Overlay: disabled op or no provider assigned ── */}
+        {overlay&&(
+          <div style={{position:'absolute',inset:0,zIndex:400,background:'rgba(10,10,12,0.96)',
+            backdropFilter:'blur(8px)',display:'flex',flexDirection:'column',alignItems:'center',
+            justifyContent:'center',padding:'40px',textAlign:'center',pointerEvents:'all'}}>
+            <div style={{fontFamily:"'Bebas Neue',sans-serif",fontSize:'72px',lineHeight:1,
+              color:overlay==='disabled'?'rgba(255,255,255,0.85)':'rgba(255,180,0,0.9)',
+              letterSpacing:'0.05em',marginBottom:'14px'}}>
+              OP {OP_NUMBER}
+            </div>
+            <div style={{fontFamily:"'Bebas Neue',sans-serif",fontSize:'28px',
+              letterSpacing:'0.18em',color:'rgba(255,255,255,0.7)',marginBottom:'18px'}}>
+              {overlay==='disabled' ? 'OPERATORY INACTIVE' : 'AWAITING ASSIGNMENT'}
+            </div>
+            <div style={{fontFamily:"'DM Sans',sans-serif",fontSize:'15px',fontWeight:500,
+              color:'rgba(255,255,255,0.45)',maxWidth:'280px',lineHeight:1.5}}>
+              {overlay==='disabled'
+                ? 'This operatory is currently disabled. Enable it from the Master tablet to begin using it.'
+                : 'A provider must be assigned to this operatory before staff can update its status. Assign from Master → Assignments.'}
+            </div>
           </div>
         )}
       </div>

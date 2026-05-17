@@ -170,6 +170,7 @@ let state = {
   },
   allOps: Array.from({length:14},(_,i)=>({id:i+1,enabled:true})),
   readyPopupDismissed: {},
+  awfaPopupDismissed: {},
   opPin: '0063', // Default op tablet PIN
   queueOrder: [], // shared AWFA/ready ordering across tablets
 };
@@ -192,6 +193,7 @@ function enforceOpInvariant(op) {
   o.apptTypes = [];
   o.note = '';
   delete state.readyPopupDismissed[op];
+  delete state.awfaPopupDismissed[op];
 }
 
 // One-shot at boot: heal any pre-existing zombies in persisted state and prune
@@ -217,14 +219,22 @@ function cleanupOnStartup() {
       popupDropped++;
     }
   });
+  let awfaPopupDropped = 0;
+  Object.keys(state.awfaPopupDismissed).forEach(op => {
+    const o = state.ops[op];
+    if (!o || o.provider === null || o.status !== 'pending') {
+      delete state.awfaPopupDismissed[op];
+      awfaPopupDropped++;
+    }
+  });
   let queueDropped = 0;
   if (Array.isArray(state.queueOrder)) {
     const before = state.queueOrder.length;
     state.queueOrder = state.queueOrder.filter(op => state.ops[op] && state.ops[op].provider !== null);
     queueDropped = before - state.queueOrder.length;
   }
-  if (zombieOps.length || popupDropped || queueDropped) {
-    console.log(`[startup] Cleaned ${zombieOps.length} zombie op states${zombieOps.length?` (ops ${zombieOps.join(', ')})`:''}, ${popupDropped} stale readyPopupDismissed, ${queueDropped} stale queueOrder`);
+  if (zombieOps.length || popupDropped || awfaPopupDropped || queueDropped) {
+    console.log(`[startup] Cleaned ${zombieOps.length} zombie op states${zombieOps.length?` (ops ${zombieOps.join(', ')})`:''}, ${popupDropped} stale readyPopupDismissed, ${awfaPopupDropped} stale awfaPopupDismissed, ${queueDropped} stale queueOrder`);
     saveState();
   }
 }
@@ -325,6 +335,8 @@ io.on('connection', socket => {
   socket.on('noteUnlock', ({op}={}) => { if(op===undefined || isValidOp(op)) socket.broadcast.emit('noteUnlock', {op:op===undefined?null:Number(op)}); });
   socket.on('dismissReadyPopup',        ({op}) => { if(!isValidOp(op)) return; state.readyPopupDismissed[op]=Date.now(); saveState(); broadcastState(); });
   socket.on('clearReadyPopupDismissed', ({op}) => { if(!isValidOp(op)) return; delete state.readyPopupDismissed[op]; saveState(); broadcastState(); });
+  socket.on('dismissAwfaPopup',         ({op}) => { if(!isValidOp(op)) return; state.awfaPopupDismissed[op]=Date.now(); saveState(); broadcastState(); });
+  socket.on('clearAwfaPopupDismissed',  ({op}) => { if(!isValidOp(op)) return; delete state.awfaPopupDismissed[op]; saveState(); broadcastState(); });
   socket.on('disconnect', () => console.log('Disconnected:', socket.id));
 });
 
