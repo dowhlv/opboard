@@ -100,6 +100,19 @@ function abbreviateNote(note,customAbbrevs=[]){
   return condenseNote(r);
 }
 
+// Sort procedures for display: pending (done=false) first in their existing
+// order, then completed (done=true) at the bottom ordered by completion time
+// (oldest first). Array.prototype.sort is stable, so pending order is preserved.
+function sortProcedures(procs){
+  if(!Array.isArray(procs)) return [];
+  return [...procs].sort((a,b)=>{
+    if(!a.done && b.done) return -1;
+    if(a.done && !b.done) return 1;
+    if(a.done && b.done) return (a.doneAt||0)-(b.doneAt||0);
+    return 0;
+  });
+}
+
 
 // ── Sound: generated via Web Audio API — no external file needed ──────────────
 // ── FitText: renders text that auto-shrinks to fit maxRows, never truncates ──
@@ -410,6 +423,7 @@ function TVDisplay() {
   const [lastDisconnected, setLastDisconnected] = useState(null);
   const [customAbbrevs, setCustomAbbrevs] = useState([]);
   const [providerColors, setProviderColors] = useState({});
+  const [providerOpOrder, setProviderOpOrder] = useState({});
   const [readyPopupDismissedState,setReadyPopupDismissedState]=useState({});
   const [popupTick,setPopupTick]=useState(0);
   const [activeProviders, setActiveProviders] = useState(PROVIDERS); // synced from server // offline detection
@@ -431,6 +445,7 @@ function TVDisplay() {
       if(state.providerColors) setProviderColors(state.providerColors);
       if(state.readyPopupDismissed) setReadyPopupDismissedState(state.readyPopupDismissed);
       if(state.activeProviders) setActiveProviders(state.activeProviders);
+      if(state.providerOpOrder) setProviderOpOrder(state.providerOpOrder);
       if(state.allOps) setAllOpsState(state.allOps);
       if(state.ops) setOps(prev=>{
         const merged={...prev};
@@ -452,7 +467,20 @@ function TVDisplay() {
   const offlineMinutes=Math.floor((now-lastUpdated)/60000);
   // Queue is DERIVED from ops status — RDY ops only for TV
 
-    const providerCols = activeProviders.map(p=>({name:p,rooms:ALL_OPS.filter(op=>ops[op]?.provider===p)}));  const n = providerCols.length;
+    // Per-provider op order: use the custom providerOpOrder when one exists for
+    // the provider, falling back to op-number order (ops absent from a custom
+    // order sort by number). Mirrors the master/front-desk ordering.
+    const orderRooms=(arr,prov)=>{
+      const custom=providerOpOrder?.[prov];
+      return arr.slice().sort((a,b)=>{
+        const ai=custom?custom.indexOf(a):-1, bi=custom?custom.indexOf(b):-1;
+        if(ai>=0&&bi>=0)return ai-bi;
+        if(ai>=0)return -1;
+        if(bi>=0)return 1;
+        return a-b;
+      });
+    };
+    const providerCols = activeProviders.map(p=>({name:p,rooms:orderRooms(ALL_OPS.filter(op=>ops[op]?.provider===p),p)}));  const n = providerCols.length;
   // RDY popup derivation — banner triggers only on ready status, oldest first
   const readyOps = ALL_OPS
     .filter(op => ops[op]?.status === "ready")
@@ -566,7 +594,7 @@ function TVDisplay() {
                 )}
                 <div style={{flex:1,minHeight:0,display:"grid",gridTemplateRows:`repeat(${maxRooms},1fr)`,gap:"8px"}}>
                   {rooms.map(op=>{
-                    const{status,note,ts,apptTypes=[]}=ops[op]||{};
+                    const{status,note,ts,apptTypes=[],procedures=[],needsCheckout}=ops[op]||{};
                     const cfg=SM[status]||SM.awaiting;
                     const isInactive=status==="inactive";
                     const cardAnim=(status==="ready"||status==="pending")&&!isInactive
@@ -608,11 +636,32 @@ function TVDisplay() {
                               }
                               {/* Note */}
                               <div style={{flex:1,display:"flex",alignItems:"center",overflow:"hidden",minWidth:0}}>
-                                <FitText text={abbreviatedNotes[op]||""} maxSz={parseInt(noteSize.match(/clamp\((\d+)px,[^,]+,(\d+)px\)/)?.[2]||noteSize.match(/(\d+)px/)?.[1]||"60")} minSz={10} maxRows={3} color={note?noteCol:"transparent"} fontWeight={700}/>
+                                <div style={{display:"flex",flexDirection:"column",gap:"4px",width:"100%",minWidth:0}}>
+                                  {procedures.length>0&&(
+                                    <div style={{display:"flex",flexWrap:"wrap",gap:"4px"}}>
+                                      {sortProcedures(procedures).map(p=>(
+                                        <span key={p.code} style={{padding:"2px 7px",borderRadius:"5px",fontSize:"clamp(10px,1vw,14px)",fontWeight:800,letterSpacing:"0.04em",lineHeight:1.2,whiteSpace:"nowrap",
+                                          background:p.done?"rgba(255,80,80,0.22)":"rgba(74,222,128,0.22)",
+                                          border:`1px solid ${p.done?"rgba(255,80,80,0.6)":"rgba(74,222,128,0.6)"}`,
+                                          color:p.done?"#ff6b6b":"#4ade80"}}>{p.code}</span>
+                                      ))}
+                                    </div>
+                                  )}
+                                  <FitText text={abbreviatedNotes[op]||""} maxSz={parseInt(noteSize.match(/clamp\((\d+)px,[^,]+,(\d+)px\)/)?.[2]||noteSize.match(/(\d+)px/)?.[1]||"60")} minSz={10} maxRows={3} color={note?noteCol:"transparent"} fontWeight={700}/>
+                                </div>
                               </div>
                             </div>
                           )}
                         </div>
+                        {/* Needs-checkout strip — read-only orange bottom overlay,
+                            mirrors the tablet views. */}
+                        {!isInactive&&status!=="awaiting"&&needsCheckout&&(
+                          <div style={{position:"absolute",left:0,right:0,bottom:0,zIndex:4,
+                            background:"#f97316",color:"#fff",padding:"4px 10px",
+                            display:"flex",alignItems:"center",justifyContent:"center",
+                            fontSize:"10px",fontWeight:700,letterSpacing:"0.1em",textTransform:"uppercase",
+                            borderTop:"none"}}>NEEDS CHECKOUT</div>
+                        )}
                       </div>
                     );
                   })}

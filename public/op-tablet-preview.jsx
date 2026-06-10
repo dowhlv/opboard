@@ -132,7 +132,7 @@ function OpTablet(){
 
   const setStatus=key=>{
     const shouldClear=['awaiting','inactive'].includes(key);
-    setOp(p=>({...p,status:key,ts:new Date(),note:shouldClear?'':p.note,apptTypes:shouldClear?[]:p.apptTypes}));
+    setOp(p=>({...p,status:key,ts:new Date(),note:shouldClear?'':p.note,apptTypes:shouldClear?[]:p.apptTypes,procedures:shouldClear?[]:p.procedures,needsCheckout:shouldClear?false:p.needsCheckout}));
     if(typeof socket!=='undefined')socket.emit('setStatus',{op:OP_NUMBER,status:key});
     showToast(`✓ ${SM[key]?.abbr||key}`);
     setShowStatusModal(false);
@@ -383,8 +383,7 @@ function OpTablet(){
         {/* ── Note editor modal ── */}
         {noteEdit&&(
           <div style={{position:'absolute',inset:0,background:'rgba(0,0,0,0.85)',zIndex:200,
-            display:'flex',alignItems:'center',justifyContent:'center'}}
-            onMouseDown={()=>{clearTimeout(noteTimeoutRef.current);if(typeof socket!=='undefined')socket.emit('noteUnlock',{op:OP_NUMBER});setNoteEdit(null);}}>
+            display:'flex',alignItems:'center',justifyContent:'center'}}>
             <div style={{background:'#1a1a22',borderRadius:'16px',padding:'20px',width:'340px',
               boxShadow:'0 32px 80px rgba(0,0,0,0.95)'}} onMouseDown={e=>e.stopPropagation()}>
               <div style={{fontFamily:"'Bebas Neue',sans-serif",fontSize:'16px',letterSpacing:'0.15em',

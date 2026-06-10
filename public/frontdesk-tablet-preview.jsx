@@ -436,14 +436,120 @@ function FitText({text,maxSz,minSz=10,maxRows=3,color,fontFamily,fontWeight}){
   );
 }
 
+// ── Procedure Checklist — green row = pending, red row = done; tap to toggle ──
+function ProcedureChecklist({ procs, onChange, onLogCustom }){
+  const [pickerOpen,setPickerOpen]=useState(false);
+  const [customVal,setCustomVal]=useState("");
+  const has=code=>procs.some(p=>p.code===code);
+  // Toggle/remove by code (stable identity) — the rows render in sorted order so
+  // the sorted index no longer matches the original procs index.
+  const toggleDone=code=>onChange(procs.map(p=>p.code===code?{...p,done:!p.done,doneAt:!p.done?Date.now():null}:p));
+  const addProc=(code,name)=>{ if(has(code))return; onChange([...procs,{code,name,done:false,doneAt:null}]); };
+  // Freeform ("Other") addition: code is the uppercased name. Only this path
+  // reports to the custom-procedure tally — preset library buttons never do.
+  const submitCustom=()=>{
+    const name=customVal.trim();
+    if(!name){ setCustomVal(""); return; }
+    const code=name.toUpperCase().replace(/\s+/g,'').slice(0,4);
+    if(!has(code)){ addProc(code,name); if(onLogCustom) onLogCustom(name); }
+    setCustomVal("");
+  };
+  return(
+    <div style={{marginBottom:"14px"}}>
+      {procs.length>0 && (
+        <div style={{display:"flex",flexDirection:"column",gap:"6px",marginBottom:"10px"}}>
+          {/* Order is frozen at open time (procs is seeded already-sorted); we
+              intentionally do NOT re-sort on every render so rows don't jump
+              while the user toggles done/pending. Re-sorts on next open. */}
+          {procs.map(p=>(
+            <div key={p.code} onClick={e=>{e.stopPropagation();toggleDone(p.code);}}
+              style={{display:"flex",alignItems:"center",gap:"10px",padding:"10px 14px",borderRadius:"10px",cursor:"pointer",textAlign:"left",
+                background:p.done?"rgba(255,80,80,0.18)":"rgba(74,222,128,0.18)",
+                border:`2px solid ${p.done?"rgba(255,80,80,0.55)":"rgba(74,222,128,0.55)"}`,
+                fontFamily:"'DM Sans',sans-serif"}}>
+              <span style={{fontWeight:800,fontSize:"13px",letterSpacing:"0.04em",color:p.done?"#ff6b6b":"#4ade80",minWidth:"46px"}}>{p.code}</span>
+              <span style={{flex:1,fontSize:"14px",fontWeight:600,color:"rgba(255,255,255,0.85)"}}>{p.name}</span>
+              <span style={{fontSize:"10px",fontWeight:800,letterSpacing:"0.1em",color:p.done?"#ff6b6b":"#4ade80"}}>{p.done?"DONE":"PENDING"}</span>
+              <button type="button"
+                onMouseDown={e=>{e.stopPropagation();onChange(procs.filter(x=>x.code!==p.code));}}
+                onMouseEnter={e=>e.currentTarget.style.color="rgba(255,100,100,0.8)"}
+                onMouseLeave={e=>e.currentTarget.style.color="rgba(255,255,255,0.3)"}
+                style={{fontSize:"16px",color:"rgba(255,255,255,0.3)",background:"none",border:"none",cursor:"pointer",padding:"0 4px"}}>✕</button>
+            </div>
+          ))}
+        </div>
+      )}
+      {!pickerOpen ? (
+        <button onMouseDown={e=>{e.stopPropagation();setPickerOpen(true);}}
+          style={{width:"100%",padding:"10px",background:"rgba(96,165,250,0.10)",border:"1px solid rgba(96,165,250,0.35)",borderRadius:"9px",
+            color:"#60a5fa",fontFamily:"'Bebas Neue',sans-serif",fontSize:"15px",letterSpacing:"0.12em",cursor:"pointer"}}>
+          + Add procedure
+        </button>
+      ) : (
+        <div style={{border:"1px solid rgba(255,255,255,0.12)",borderRadius:"10px",padding:"12px",background:"rgba(255,255,255,0.03)",maxHeight:"40vh",overflowY:"auto"}}>
+          {PROCEDURE_LIBRARY.map((sec,si)=>(
+            <div key={sec.section} style={{marginBottom:"10px"}}>
+              {si>0 && <div style={{height:"1px",background:"rgba(255,255,255,0.12)",margin:"12px 0 10px"}}/>}
+              <div style={{fontFamily:"'Bebas Neue',sans-serif",fontSize:"24px",letterSpacing:"0.18em",color:"rgba(255,255,255,0.55)",marginBottom:"6px"}}>{sec.section}</div>
+              {sec.groups.map((g,gi)=>(
+                <div key={gi} style={{marginBottom:g.label?"8px":"4px"}}>
+                  {g.label && <div style={{fontSize:"10px",letterSpacing:"0.16em",color:"rgba(255,255,255,0.4)",fontWeight:600,marginBottom:"4px"}}>{g.label.toUpperCase()}</div>}
+                  <div style={{display:"flex",flexWrap:"wrap",gap:"5px"}}>
+                    {g.items.map(it=>{
+                      const added=has(it.code);
+                      return(
+                        <button key={it.code} disabled={added}
+                          onMouseDown={e=>{e.stopPropagation(); if(!added) addProc(it.code,it.name);}}
+                          style={{display:"flex",flexDirection:"column",alignItems:"flex-start",
+                            padding:"5px 8px",borderRadius:"6px",
+                            background:added?"rgba(255,255,255,0.03)":"rgba(74,222,128,0.10)",
+                            border:`1px solid ${added?"rgba(255,255,255,0.08)":"rgba(74,222,128,0.35)"}`,
+                            cursor:added?"default":"pointer",opacity:added?0.4:1,
+                            fontFamily:"'DM Sans',sans-serif"}}>
+                          <span style={{fontWeight:800,fontSize:"11px",letterSpacing:"0.04em",color:added?"rgba(255,255,255,0.4)":"#4ade80"}}>{it.code}</span>
+                          <span style={{fontSize:"10px",color:added?"rgba(255,255,255,0.3)":"rgba(255,255,255,0.75)",fontWeight:600}}>{it.name}</span>
+                        </button>
+                      );
+                    })}
+                  </div>
+                </div>
+              ))}
+            </div>
+          ))}
+          {/* Freeform "Other" — type a custom procedure not in the library.
+              This is the ONLY add path that reports to the custom-procedure tally. */}
+          <div style={{height:"1px",background:"rgba(255,255,255,0.12)",margin:"12px 0 10px"}}/>
+          <div style={{fontSize:"10px",letterSpacing:"0.16em",color:"rgba(255,255,255,0.4)",fontWeight:600,marginBottom:"4px"}}>OTHER</div>
+          <div style={{display:"flex",gap:"6px"}}>
+            <input value={customVal} onChange={e=>setCustomVal(e.target.value)}
+              onMouseDown={e=>e.stopPropagation()}
+              onKeyDown={e=>{if(e.key==="Enter"){e.preventDefault();e.stopPropagation();submitCustom();}}}
+              placeholder="Custom procedure…"
+              style={{flex:1,padding:"8px 10px",background:"rgba(255,255,255,0.05)",border:"1px solid rgba(255,255,255,0.15)",borderRadius:"8px",color:"#fff",fontFamily:"'DM Sans',sans-serif",fontSize:"13px",outline:"none"}}/>
+            <button onMouseDown={e=>{e.stopPropagation();submitCustom();}}
+              style={{padding:"8px 14px",background:"rgba(74,222,128,0.12)",border:"1px solid rgba(74,222,128,0.35)",borderRadius:"8px",color:"#4ade80",fontFamily:"'Bebas Neue',sans-serif",fontSize:"14px",letterSpacing:"0.1em",cursor:"pointer"}}>+ ADD</button>
+          </div>
+          <button onMouseDown={e=>{e.stopPropagation();setPickerOpen(false);}}
+            style={{width:"100%",padding:"8px",marginTop:"10px",background:"rgba(255,255,255,0.05)",border:"1px solid rgba(255,255,255,0.15)",borderRadius:"8px",
+              color:"rgba(255,255,255,0.6)",fontFamily:"'Bebas Neue',sans-serif",fontSize:"13px",letterSpacing:"0.1em",cursor:"pointer"}}>
+            ✕ Close
+          </button>
+        </div>
+      )}
+    </div>
+  );
+}
+
 function FrontDeskTablet(){
   const[ops,setOps]=useState({});
   const [allOpsState, setAllOpsState] = useState([]);
   const [activeProviders, setActiveProviders] = useState(PROVIDERS);
   const[antsOps,setAntsOps]=useState(new Set());
   const[queueOrder,setQueueOrder]=useState([]);
+  const[providerOpOrder,setProviderOpOrder]=useState({});
   const[showQueue,setShowQueue]=useState(false);
-  // Unified drag (kind: 'reassign' for provider columns, 'queue' for queue overlay).
+  // Unified drag (kind: 'reassign' moves an op to another provider column,
+  // 'reorder' reorders ops within one provider column, 'queue' for queue overlay).
   const [drag,setDrag]=useState(null);
   const [dragOverCol,setDragOverCol]=useState(null);
   const [dragOverId,setDragOverId]=useState(null);
@@ -452,6 +558,19 @@ function FrontDeskTablet(){
   const dragOverColRef=useRef(null);
   const dragOverIdRef=useRef(null);
   const holdTimerRef=useRef(null);
+  // Reorder committed-order system: during a reorder drag, reorderOrder holds the
+  // current working order of ops in the source column. It starts as a copy of the
+  // display order and only changes when the dragged card's center crosses an
+  // adjacent card's midpoint (see onMove), giving stable, bounce-free slots.
+  // reorderOrderRef mirrors it for synchronous reads in the window handlers;
+  // reorderSlotsRef holds the fixed slot-center Ys captured at drag start;
+  // reorderStartCenterRef is the dragged card's center at drag start;
+  // reorderOriginalRef is the untouched starting order (to detect changes on drop).
+  const [reorderOrder,setReorderOrder]=useState(null);
+  const reorderOrderRef=useRef(null);
+  const reorderOriginalRef=useRef(null);
+  const reorderSlotsRef=useRef(null);
+  const reorderStartCenterRef=useRef(null);
   useEffect(()=>{dragRef.current=drag;},[drag]);
   useEffect(()=>{dragOverColRef.current=dragOverCol;},[dragOverCol]);
   useEffect(()=>{dragOverIdRef.current=dragOverId;},[dragOverId]);
@@ -487,6 +606,7 @@ function FrontDeskTablet(){
   const showToast=msg=>{setToast(msg);clearTimeout(toastRef.current);toastRef.current=setTimeout(()=>setToast(null),2000);};
 
   const emitSocket=(event,data)=>{ try{ if(typeof socket!=='undefined') socket.emit(event,data); }catch(e){console.error("FD emit failed:",e);} };
+  const updateProcedures=(op,procedures)=>{setOps(p=>({...p,[op]:{...p[op],procedures}}));emitSocket('setProcedures',{op,procedures});};
 
   // ── Socket.io — receive state from server ────────────────────────────────
   useEffect(()=>{
@@ -500,6 +620,7 @@ function FrontDeskTablet(){
       if(state.customAbbrevs) setCustomAbbrevs(state.customAbbrevs);
       if(state.activeProviders) setActiveProviders(state.activeProviders);
       if(Array.isArray(state.queueOrder)) setQueueOrder(state.queueOrder);
+      if(state.providerOpOrder) setProviderOpOrder(state.providerOpOrder);
       if(state.awfaPopupDismissed) setAwfaPopupDismissed(state.awfaPopupDismissed);
       if(state.ops) setOps(prev=>{        const merged={...prev};
         Object.keys(state.ops).forEach(k=>{
@@ -528,6 +649,59 @@ function FrontDeskTablet(){
   },[]);
   const APPT_TYPES=["NP","CCX","Tx","LOE","Delivery","Office Visit","Prophy","PMT","SRP"];
 const APPT_ABBR_MAP={"NP":"NP","CCX":"CCX","Tx":"TX","LOE":"LOE","Delivery":"DEL","Office Visit":"OV","Prophy":"PRO","PMT":"PMT","SRP":"SRP"};
+const PROCEDURE_LIBRARY=[
+  {section:"GP", groups:[
+    {label:"Exam",      items:[{code:"NP",name:"New Patient"},{code:"CCX",name:"Exam"},{code:"LOE",name:"Ltd Oral Exam"},{code:"OV",name:"Office Visit"},{code:"PO",name:"Post-Op"},{code:"CON",name:"Consult"},{code:"PRB",name:"Probe"},{code:"DRX",name:"Doctor Review"}]},
+    {label:"Direct",    items:[{code:"FIL",name:"Fill"},{code:"CUR",name:"Curodont"},{code:"SEA",name:"Sealant"},{code:"ENP",name:"Enamelplasty"}]},
+    {label:"Indirect",  items:[{code:"CRN",name:"Crown"},{code:"BR",name:"Bridge"},{code:"INL",name:"Inlay"},{code:"ONL",name:"Onlay"},{code:"IDEL",name:"Indirect Del"},{code:"TMP",name:"Temporary"},{code:"REC",name:"Recement"}]},
+    {label:"Removable", items:[{code:"NGSN",name:"Nightguard Scan"},{code:"RTSN",name:"Retainer Scan"},{code:"DESN",name:"Denture Scan"},{code:"WAX",name:"Wax Rims"},{code:"FRM",name:"Framework"},{code:"TIWT",name:"Try-in w/ Teeth"},{code:"RDEL",name:"Removable Del"}]},
+    {label:"Anesthesia", items:[{code:"ANSTH", name:"Anesthetize"}]},
+  ]},
+  {section:"HYG",   groups:[{label:null, items:[{code:"PRO",name:"Prophy"},{code:"POL",name:"Polish"},{code:"SRP",name:"Scaling & RP"},{code:"PMT",name:"Perio Maintenance"},{code:"ADJ",name:"Adjunct"},{code:"ARS",name:"Arrestin"}]}]},
+  {section:"OS",    groups:[{label:null, items:[{code:"XBM",name:"Ext+Graft+Mem"},{code:"EXT",name:"Extraction"},{code:"BM",name:"Graft+Mem"},{code:"SUT",name:"Suture"},{code:"IMP",name:"Implant"},{code:"SEC",name:"2nd Stage"},{code:"IMSN",name:"Implant Crown Scan"}]}]},
+  {section:"Endo",  groups:[{label:null, items:[{code:"PDEB",name:"Pulp Debride"}]}]},
+  {section:"Ortho", groups:[{label:null, items:[{code:"SPK",name:"Spark Consult"},{code:"ATT",name:"Spark Attachment"},{code:"ALI",name:"Aligner Delivery"}]}]},
+  {section:"X-Ray", groups:[{label:null, items:[{code:"XRY",name:"X-Ray"},{code:"CT",name:"CBCT"},{code:"BW",name:"Bitewing"},{code:"PA",name:"Periapical"},{code:"IOP",name:"Intra-oral Photos"}]}]},
+];
+const APPT_PREPOPULATE = {
+  "NP":           [{code:"NP",name:"New Patient"},{code:"XRY",name:"X-Ray"},{code:"PRB",name:"Probe"}],
+  "CCX":          [{code:"CCX",name:"Exam"},{code:"XRY",name:"X-Ray"},{code:"PRB",name:"Probe"}],
+  "Tx":           [],
+  "LOE":          [{code:"LOE",name:"Ltd Oral Exam"},{code:"CT",name:"CBCT"},{code:"BW",name:"Bitewing"},{code:"PA",name:"Periapical"}],
+  "Delivery":     [],
+  "Office Visit": [{code:"OV",name:"Office Visit"}],
+  "Prophy":       [{code:"PRO",name:"Prophy"},{code:"POL",name:"Polish"}],
+  "PMT":          [{code:"PMT",name:"Perio Maintenance"},{code:"POL",name:"Polish"}],
+  "SRP":          [{code:"SRP",name:"Scaling & RP"},{code:"POL",name:"Polish"},{code:"ADJ",name:"Adjunct"}],
+};
+function prepopulateFromApptTypes(apptTypes){
+  const out=[]; const seen=new Set();
+  (apptTypes||[]).forEach(t=>(APPT_PREPOPULATE[t]||[]).forEach(p=>{if(!seen.has(p.code)){seen.add(p.code);out.push({code:p.code,name:p.name,done:false,doneAt:null});}}));
+  return out;
+}
+function applySaveTriggers(procs,openProcs){
+  const out=(procs||[]).map(p=>({...p}));
+  const has=c=>out.some(p=>p.code===c);
+  // M8: only auto-add the X-rays when IMP/SEC was NEWLY added this session (not
+  // present when the modal opened). Otherwise a user could never remove an
+  // auto-added X-ray — it would reappear on every save while IMP/SEC stays.
+  const hadAtOpen=c=>(openProcs||[]).some(p=>p.code===c);
+  if(has("IMP")&&!hadAtOpen("IMP")) [["CT","CBCT"],["BW","Bitewing"],["PA","Periapical"]].forEach(([c,n])=>{if(!has(c))out.push({code:c,name:n,done:false,doneAt:null});});
+  if(has("SEC")&&!hadAtOpen("SEC")) [["CT","CBCT"],["BW","Bitewing"]].forEach(([c,n])=>{if(!has(c))out.push({code:c,name:n,done:false,doneAt:null});});
+  return out;
+}
+// Sort procedures for display/save: pending (done=false) first in their existing
+// order, then completed (done=true) at the bottom ordered by completion time
+// (oldest first). Array.prototype.sort is stable, so pending order is preserved.
+function sortProcedures(procs){
+  if(!Array.isArray(procs)) return [];
+  return [...procs].sort((a,b)=>{
+    if(!a.done && b.done) return -1;
+    if(a.done && !b.done) return 1;
+    if(a.done && b.done) return (a.doneAt||0)-(b.doneAt||0);
+    return 0;
+  });
+}
   const CLEAR_ON_STATUS=["awaiting","inactive"];
   const setStatus=(op,key)=>{
     const statusLabel=STATUSES.find(s=>s.key===key)?.abbr||key;
@@ -537,6 +711,8 @@ const APPT_ABBR_MAP={"NP":"NP","CCX":"CCX","Tx":"TX","LOE":"LOE","Delivery":"DEL
       return {...p,[op]:{...prev,status:key,ts:new Date(),
         note:shouldClear?"":prev.note,
         apptTypes:shouldClear?[]:prev.apptTypes,
+        procedures:shouldClear?[]:prev.procedures,
+        needsCheckout:shouldClear?false:prev.needsCheckout,
       }};
     });
     showToast(`✓ Op ${op} → ${statusLabel}`);
@@ -545,8 +721,21 @@ const APPT_ABBR_MAP={"NP":"NP","CCX":"CCX","Tx":"TX","LOE":"LOE","Delivery":"DEL
     setMenu(null);
   };
   const setApptType=(op,t)=>{
-    setOps(p=>({...p,[op]:{...p[op],apptTypes:Array.isArray(t)?t:[]}}));
-    emitSocket('setApptType',{op,apptTypes:Array.isArray(t)?t:[]});
+    const nt=Array.isArray(t)?t:[];
+    const oldTypes=ops[op]?.apptTypes||[];
+    setOps(p=>({...p,[op]:{...p[op],apptTypes:nt}}));
+    emitSocket('setApptType',{op,apptTypes:nt});
+    // M9: merge in prepopulate procedures for any NEWLY ADDED appt type (deduped
+    // by code). Removing an appt type never touches procedures; existing
+    // procedures are never clobbered or removed.
+    const added=nt.filter(x=>!oldTypes.includes(x));
+    if(added.length>0){
+      const cur=ops[op]?.procedures||[];
+      const have=new Set(cur.map(p=>p.code));
+      const merged=[...cur];
+      prepopulateFromApptTypes(added).forEach(p=>{if(!have.has(p.code)){have.add(p.code);merged.push(p);}});
+      if(merged.length!==cur.length) updateProcedures(op,merged);
+    }
     // No toast on individual toggle — keep menu open for multi-select; DONE button closes.
   };
 
@@ -666,6 +855,23 @@ const APPT_ABBR_MAP={"NP":"NP","CCX":"CCX","Tx":"TX","LOE":"LOE","Delivery":"DEL
       if (prev) emitSocket('noteUnlock', { op: prev.op });
       return null;
     });
+    // Reorder: capture the source column's order and fixed slot-center Ys now,
+    // while the cards are still in their pre-drag (un-transformed) positions.
+    if (p.kind === 'reorder') {
+      let col = null;
+      document.querySelectorAll('[data-provider-col]').forEach(c => {
+        if (c.getAttribute('data-provider-col') === p.payload.sourceProvider) col = c;
+      });
+      const cards = col ? Array.from(col.querySelectorAll('[data-op]')) : [];
+      const order = cards.map(el => Number(el.getAttribute('data-op')));
+      const centers = cards.map(el => { const r = el.getBoundingClientRect(); return r.top + r.height / 2; });
+      const k0 = order.indexOf(p.payload.op);
+      reorderOriginalRef.current = order.slice();
+      reorderOrderRef.current = order.slice();
+      reorderSlotsRef.current = centers;
+      reorderStartCenterRef.current = k0 >= 0 ? centers[k0] : p.startY;
+      setReorderOrder(order.slice());
+    }
     setDrag({
       kind: p.kind, ...p.payload,
       startX: p.startX, startY: p.startY,
@@ -745,6 +951,28 @@ const APPT_ABBR_MAP={"NP":"NP","CCX":"CCX","Tx":"TX","LOE":"LOE","Delivery":"DEL
         // when React commits the state-driven mirror.
         dragOverColRef.current = targetCol;
         setDragOverCol(targetCol);
+      } else if (cur.kind === 'reorder') {
+        // Reorder within a single provider column via a committed midpoint
+        // threshold. The dragged card's center is its start center plus the
+        // pointer delta; when it crosses the center (midpoint) of the adjacent
+        // card in the committed order, swap the two. Slot centers are fixed, so
+        // committed positions only change on a real crossing — no bounce.
+        const committed = reorderOrderRef.current;
+        const slots = reorderSlotsRef.current;
+        if (committed && slots && slots.length) {
+          const draggedCenterY = reorderStartCenterRef.current + (y - cur.startY);
+          let k = committed.indexOf(cur.op);
+          let changed = false;
+          while (k > 0 && draggedCenterY < slots[k - 1]) {
+            const tmp = committed[k - 1]; committed[k - 1] = committed[k]; committed[k] = tmp;
+            k--; changed = true;
+          }
+          while (k < committed.length - 1 && draggedCenterY > slots[k + 1]) {
+            const tmp = committed[k + 1]; committed[k + 1] = committed[k]; committed[k] = tmp;
+            k++; changed = true;
+          }
+          if (changed) setReorderOrder(committed.slice());
+        }
       } else {
         const el = document.elementFromPoint(x, y);
         let qi = el?.closest('[data-queue-item-id]');
@@ -771,6 +999,17 @@ const APPT_ABBR_MAP={"NP":"NP","CCX":"CCX","Tx":"TX","LOE":"LOE","Delivery":"DEL
           if (target && target !== cur.sourceProvider) {
             setConfirmDragMove({ op: cur.op, from: cur.sourceProvider, to: target });
           }
+        } else if (cur.kind === 'reorder') {
+          // Drop: persist the final committed order. If it matches the order at
+          // drag start (a drag that committed nothing), leave state untouched so
+          // the column simply restores to its original order. No confirmation popup.
+          const committed = reorderOrderRef.current;
+          const original = reorderOriginalRef.current;
+          if (committed && original && committed.join(',') !== original.join(',')) {
+            const arr = committed.slice();
+            setProviderOpOrder(prev => ({ ...prev, [cur.sourceProvider]: arr }));
+            emitSocket('setProviderOpOrder', { provider: cur.sourceProvider, order: arr });
+          }
         } else if (cur.kind === 'queue') {
           const overId = dragOverIdRef.current;
           if (overId !== null && overId !== cur.itemId) {
@@ -790,6 +1029,11 @@ const APPT_ABBR_MAP={"NP":"NP","CCX":"CCX","Tx":"TX","LOE":"LOE","Delivery":"DEL
       setDrag(null);
       setDragOverCol(null);
       setDragOverId(null);
+      reorderOrderRef.current = null;
+      reorderOriginalRef.current = null;
+      reorderSlotsRef.current = null;
+      reorderStartCenterRef.current = null;
+      setReorderOrder(null);
     };
     window.addEventListener('mousemove', onMove);
     window.addEventListener('mouseup',   onUp);
@@ -861,7 +1105,20 @@ const APPT_ABBR_MAP={"NP":"NP","CCX":"CCX","Tx":"TX","LOE":"LOE","Delivery":"DEL
     });
   },[ops]);
 
-  const providerCols=activeProviders.map(p=>({name:p,rooms:ALL_OPS.filter(op=>ops[op]?.provider===p).sort((a,b)=>a-b)}));
+  // Per-provider op order: use the custom providerOpOrder when one exists for
+  // the provider, falling back to op-number order (same indexOf-with-fallback
+  // pattern as queueOrder above). Ops absent from a custom order sort by number.
+  const orderRooms=(arr,prov)=>{
+    const custom=providerOpOrder?.[prov];
+    return arr.slice().sort((a,b)=>{
+      const ai=custom?custom.indexOf(a):-1, bi=custom?custom.indexOf(b):-1;
+      if(ai>=0&&bi>=0)return ai-bi;
+      if(ai>=0)return -1;
+      if(bi>=0)return 1;
+      return a-b;
+    });
+  };
+  const providerCols=activeProviders.map(p=>({name:p,rooms:orderRooms(ALL_OPS.filter(op=>ops[op]?.provider===p),p)}));
   const n=providerCols.length;
   const abbreviatedNotes=useMemo(()=>{
     const r={};
@@ -965,24 +1222,48 @@ const APPT_ABBR_MAP={"NP":"NP","CCX":"CCX","Tx":"TX","LOE":"LOE","Delivery":"DEL
                 )}
                 <div style={{...S.roomCol,display:"grid",gridTemplateRows:`repeat(${Math.max(rooms.length,3)},1fr)`}}>
                   {rooms.map(op=>{
-                    const{status,note,ts,apptTypes=[]}=ops[op]||{};
+                    const{status,note,ts,apptTypes=[],procedures=[],needsCheckout}=ops[op]||{};
                     const cfg=SM[status]||SM.awaiting;
                     const isInactive=status==="inactive";
                     const cardAnim=(status==="ready"||status==="pending")&&!isInactive?"slowPulse 2.5s ease-in-out infinite":"none";
                     const isOpen=menu?.op===op&&menu?.type==="status";
                     const apptOpen=menu?.op===op&&menu?.type==="appt";
-                    const isDragged = drag?.kind==='reassign' && drag.op===op;
+                    const isReorderDragged = drag?.kind==='reorder' && drag.op===op;
+                    const isDragged = (drag?.kind==='reassign' && drag.op===op) || isReorderDragged;
+                    // Reorder slide: each non-dragged card sits in its committed
+                    // slot (reorderOrder, maintained by the midpoint system in
+                    // onMove). The committed order differs from the display order
+                    // by a single moved card, so every other card is displaced by
+                    // at most one slot — translateY ±100% of its own height. The
+                    // existing "transform .2s" transition animates the slide.
+                    // isReorderTarget keeps the drop-gap highlight on the card
+                    // directly below the dragged card in the committed order.
+                    let reorderShift = "";
+                    let isReorderTarget = false;
+                    if (drag?.kind==='reorder' && reorderOrder && !isReorderDragged) {
+                      const j = reorderOrder.indexOf(op);
+                      const i = rooms.indexOf(op);
+                      if (j>=0 && i>=0) {
+                        if (j < i) reorderShift = "translateY(-100%)";
+                        else if (j > i) reorderShift = "translateY(100%)";
+                      }
+                      const kd = reorderOrder.indexOf(drag.op);
+                      if (kd>=0 && reorderOrder[kd+1]===op) isReorderTarget = true;
+                    }
                     const tx = isDragged ? (drag.pointerX - drag.startX) / drag.scale : 0;
                     const ty = isDragged ? (drag.pointerY - drag.startY) / drag.scale : 0;
                     return(
                       <div key={op} data-op={op} className={antsOps.has(op)?"card-ants":""}
                         style={{...S.card,background:cfg.bg,
                           border:antsOps.has(op)?"none":`2px solid ${isOpen||apptOpen?cfg.numColor:cfg.border}`,
-                          animation:cardAnim,opacity:isInactive?0.4:1,
+                          animation:cardAnim,opacity:isInactive?0.4:1,position:"relative",
                           padding:0,overflow:"hidden",display:"flex",flexDirection:"row",alignItems:"stretch",
-                          transform: isDragged ? `translate(${tx}px, ${ty}px)` : "none",
+                          transform: isDragged ? `translate(${tx}px, ${ty}px)` : reorderShift || "none",
                           transition: isDragged ? "none" : "transform .2s",
-                          boxShadow: isDragged ? "0 12px 32px rgba(0,0,0,0.6)" : undefined,
+                          boxShadow: isDragged ? "0 12px 32px rgba(0,0,0,0.6)" : isReorderTarget ? "0 -5px 0 0 #4ade80, 0 0 14px rgba(74,222,128,0.45)" : undefined,
+                          // While reorder-dragging, ignore pointer hits on the dragged
+                          // card so elementFromPoint resolves to the card underneath.
+                          pointerEvents: isReorderDragged ? "none" : undefined,
                           zIndex: isDragged ? 1000 : "auto"}}
                         onMouseDownCapture={e=>{ if(!isInactive) primeDrag('reassign', { op, sourceProvider: name }, e); }}
                         onTouchStartCapture={e=>{ if(!isInactive) primeDrag('reassign', { op, sourceProvider: name }, e); }}
@@ -992,6 +1273,25 @@ const APPT_ABBR_MAP={"NP":"NP","CCX":"CCX","Tx":"TX","LOE":"LOE","Delivery":"DEL
                         onTouchEndCapture={cancelHold}
                         onMouseDown={()=>setMenu(null)}>
 
+                        {/* Grip handle (top-right) — drag from here to reorder
+                            this op within its provider column. Its bubble-phase
+                            mousedown re-primes the gesture as 'reorder', overriding
+                            the card's capture-phase 'reassign' prime. */}
+                        {!isInactive&&(
+                          <div
+                            onMouseDown={e=>{e.stopPropagation();primeDrag('reorder',{op,sourceProvider:name},e);promoteToDrag();}}
+                            onTouchStart={e=>{e.stopPropagation();primeDrag('reorder',{op,sourceProvider:name},e);promoteToDrag();}}
+                            onMouseMoveCapture={maybePromoteOnMove}
+                            onTouchMoveCapture={maybePromoteOnMove}
+                            onMouseUpCapture={cancelHold}
+                            onTouchEndCapture={cancelHold}
+                            title="Drag to reorder"
+                            style={{position:"absolute",top:"1px",right:"3px",zIndex:5,
+                              fontSize:"20px",lineHeight:1,color:cfg.numColor,opacity:0.4,
+                              cursor:"grab",padding:"12px",minWidth:"44px",minHeight:"44px",boxSizing:"border-box",
+                              display:"flex",alignItems:"center",justifyContent:"center",
+                              userSelect:"none",touchAction:"none"}}>⠿</div>
+                        )}
 
                         {/* Left: op number + elapsed */}
                         <button
@@ -1055,25 +1355,60 @@ const APPT_ABBR_MAP={"NP":"NP","CCX":"CCX","Tx":"TX","LOE":"LOE","Delivery":"DEL
                                 e.stopPropagation();
                                 if(menu){setMenu(null);return;}
                                 if(noteLocked?.op===op&&noteLocked?.by!=="frontdesk"){showToast("🔒 In use");return;}
-                                setNoteEdit({op,draft:note||""});emitSocket("noteLock",{op,by:"frontdesk"});resetFDNoteTimeout(op);}}
+                                {const ip=(ops[op]?.procedures||[]).length>0?(ops[op].procedures||[]).map(p=>({...p})):prepopulateFromApptTypes(ops[op]?.apptTypes);setNoteEdit({op,draft:note||"",procs:sortProcedures(ip),openProcs:ip.map(p=>({...p}))});}emitSocket("noteLock",{op,by:"frontdesk"});resetFDNoteTimeout(op);}}
                               style={{flex:1,textAlign:"left",padding:0,background:"transparent",
                                 border:"none",cursor:"pointer",alignSelf:"center",minWidth:0,
                                 overflow:"hidden",display:"flex",alignItems:"center"}}>
-                              <FitText
-                                text={abbreviateNote(note,customAbbrevs)||"Add note"}
-                                maxSz={parseInt(notSz.match(/(\d+)px/)?.[1]||"36")}
-                                minSz={10}
-                                maxRows={3}
-                                color={note
-                                  ? cfg.key==="awaiting"?"rgba(0,0,0,0.75)":"rgba(255,255,255,0.85)"
-                                  : cfg.key==="awaiting"?"rgba(0,0,0,0.25)":"rgba(255,255,255,0.18)"}
-                                fontFamily="'DM Sans',sans-serif"
-                                fontWeight={700}
-                              />
+                              <div style={{display:"flex",flexDirection:"column",gap:"3px",width:"100%",minWidth:0}}>
+                                {procedures.length>0&&(
+                                  <div style={{display:"grid",gridTemplateColumns:`repeat(${procedures.length>=10?4:3},1fr)`,gap:"3px"}}>
+                                    {sortProcedures(procedures).map(p=>(
+                                      <span key={p.code} style={{display:"block",width:"100%",boxSizing:"border-box",textAlign:"center",padding:"8px 4px",borderRadius:"4px",fontSize:"10px",fontWeight:800,letterSpacing:"0.04em",lineHeight:1.3,whiteSpace:"nowrap",
+                                        background:p.done?"rgba(255,80,80,0.2)":"rgba(74,222,128,0.2)",
+                                        border:`1px solid ${p.done?"rgba(255,80,80,0.55)":"rgba(74,222,128,0.55)"}`,
+                                        color:p.done?"#ff6b6b":"#4ade80"}}>{p.code}</span>
+                                    ))}
+                                  </div>
+                                )}
+                                <FitText
+                                  text={abbreviateNote(note,customAbbrevs)||(procedures.length>0?"":"Procedures & Note")}
+                                  maxSz={parseInt(notSz.match(/(\d+)px/)?.[1]||"36")}
+                                  minSz={10}
+                                  maxRows={3}
+                                  color={note
+                                    ? cfg.key==="awaiting"?"rgba(0,0,0,0.75)":"rgba(255,255,255,0.85)"
+                                    : cfg.key==="awaiting"?"rgba(0,0,0,0.25)":"rgba(255,255,255,0.18)"}
+                                  fontFamily="'DM Sans',sans-serif"
+                                  fontWeight={700}
+                                />
+                              </div>
                             </button>
                           </div>
                         )}
                         {isInactive&&<div style={{flex:1}}/>}
+
+                        {/* Needs-checkout strip — pinned to the card bottom as a
+                            full-width overlay (the card is a relative, overflow-
+                            hidden row, so this matches the grip-handle overlay
+                            pattern). Only on active (provider-assigned) ops. */}
+                        {!isInactive&&status!=="awaiting"&&(
+                          needsCheckout ? (
+                            <div
+                              onMouseDown={e=>{e.stopPropagation();emitSocket('setNeedsCheckout',{op,value:!needsCheckout});}}
+                              style={{position:"absolute",left:0,right:0,bottom:0,zIndex:4,
+                                background:"#f97316",color:"#fff",padding:"4px 10px",
+                                display:"flex",alignItems:"center",justifyContent:"center",cursor:"pointer",
+                                fontSize:"10px",fontWeight:700,letterSpacing:"0.1em",textTransform:"uppercase",
+                                borderTop:"none"}}>NEEDS CHECKOUT</div>
+                          ) : (
+                            <div
+                              onMouseDown={e=>{e.stopPropagation();emitSocket('setNeedsCheckout',{op,value:!needsCheckout});}}
+                              style={{position:"absolute",left:0,right:0,bottom:0,zIndex:4,
+                                borderTop:"0.5px solid rgba(255,255,255,0.06)",padding:"4px 10px",
+                                display:"flex",alignItems:"center",justifyContent:"center",cursor:"pointer",
+                                color:"rgba(255,255,255,0.15)",fontSize:"9px",fontWeight:700,letterSpacing:"0.1em",textTransform:"uppercase"}}>NEEDS CHECKOUT</div>
+                          )
+                        )}
                       </div>
                     );
                   })}
@@ -1153,11 +1488,24 @@ const APPT_ABBR_MAP={"NP":"NP","CCX":"CCX","Tx":"TX","LOE":"LOE","Delivery":"DEL
 
         {/* Note Edit Modal */}
         {noteEdit&&(
-          <div style={{position:"absolute",inset:0,background:"rgba(0,0,0,0.75)",zIndex:600,display:"flex",alignItems:"center",justifyContent:"center"}}
-            onMouseDown={()=>setNoteEdit(null)}>
-            <div style={{background:"#1a1a22",borderRadius:"16px",padding:"24px",width:"400px",boxShadow:"0 32px 80px rgba(0,0,0,0.95)"}}
+          <div style={{position:"absolute",inset:0,background:"rgba(0,0,0,0.75)",zIndex:600,display:"flex",alignItems:"center",justifyContent:"center"}}>
+            <div style={{background:"#1a1a22",borderRadius:"16px",padding:"24px",width:"400px",maxHeight:"92vh",overflowY:"auto",boxShadow:"0 32px 80px rgba(0,0,0,0.95)"}}
               onMouseDown={e=>e.stopPropagation()}>
-              <div style={{fontFamily:"'Bebas Neue',sans-serif",fontSize:"18px",letterSpacing:"0.15em",color:"rgba(255,255,255,0.4)",marginBottom:"16px"}}>NOTE · OP {noteEdit.op}</div>
+              <div style={{display:"flex",alignItems:"center",justifyContent:"space-between",marginBottom:"16px"}}>
+                <div style={{fontFamily:"'Bebas Neue',sans-serif",fontSize:"18px",letterSpacing:"0.15em",color:"rgba(255,255,255,0.4)"}}>NOTE · OP {noteEdit.op}</div>
+                <button
+                  onMouseDown={e=>{e.stopPropagation();setNoteEdit(p=>({...p,procs:[]}));}}
+                  onMouseEnter={e=>e.currentTarget.style.color="rgba(255,80,80,1)"}
+                  onMouseLeave={e=>e.currentTarget.style.color="rgba(255,80,80,0.7)"}
+                  style={{background:"none",border:"none",color:"rgba(255,80,80,0.7)",fontSize:"12px",fontWeight:700,letterSpacing:"0.06em",textTransform:"uppercase",cursor:"pointer"}}>
+                  Clear Procedures
+                </button>
+              </div>
+              <ProcedureChecklist
+                procs={noteEdit.procs||[]}
+                onChange={next=>setNoteEdit(p=>({...p,procs:next}))}
+                onLogCustom={name=>emitSocket('logCustomProcedure',{name})}
+              />
               <textarea
                 autoFocus
                 ref={el=>{if(el&&!el.dataset.selected){el.dataset.selected='1';setTimeout(()=>{el.focus();el.select();},50);}}}
@@ -1167,6 +1515,7 @@ const APPT_ABBR_MAP={"NP":"NP","CCX":"CCX","Tx":"TX","LOE":"LOE","Delivery":"DEL
                 onKeyDown={e=>{
                   if(e.key==='Enter'&&!e.shiftKey){
                     e.preventDefault();
+                    updateProcedures(noteEdit.op,applySaveTriggers(noteEdit.procs,noteEdit.openProcs));
                     setOps(p=>({...p,[noteEdit.op]:{...p[noteEdit.op],note:noteEdit.draft,noteUpdatedAt:new Date()}}));
                     emitSocket('setNote',{op:noteEdit.op,note:noteEdit.draft});
                     emitSocket('noteUnlock',{op:noteEdit.op});
@@ -1182,11 +1531,12 @@ const APPT_ABBR_MAP={"NP":"NP","CCX":"CCX","Tx":"TX","LOE":"LOE","Delivery":"DEL
                 <div style={{fontSize:"12px",color:noteEdit.draft.length>35?"rgba(255,80,80,0.8)":"rgba(255,255,255,0.3)",fontWeight:600}}>{noteEdit.draft.length}/40</div>
               </div>
               <div style={{display:"flex",gap:"10px",marginTop:"14px"}}>
-                <button onMouseDown={()=>setNoteEdit(null)}
+                <button onMouseDown={()=>{emitSocket('noteUnlock',{op:noteEdit.op});clearTimeout(fdNoteTimeoutRef.current);setNoteEdit(null);}}
                   style={{flex:1,padding:"12px",background:"rgba(255,255,255,0.06)",border:"1px solid rgba(255,255,255,0.12)",borderRadius:"9px",color:"rgba(255,255,255,0.5)",fontFamily:"'Bebas Neue',sans-serif",fontSize:"16px",letterSpacing:"0.1em",cursor:"pointer"}}>
                   CANCEL
                 </button>
                 <button onMouseDown={()=>{
+                  updateProcedures(noteEdit.op,applySaveTriggers(noteEdit.procs,noteEdit.openProcs));
                   setOps(p=>({...p,[noteEdit.op]:{...p[noteEdit.op],note:noteEdit.draft,noteUpdatedAt:new Date()}}));
                   emitSocket('setNote',{op:noteEdit.op,note:noteEdit.draft});
                   emitSocket('noteUnlock',{op:noteEdit.op});
@@ -1246,8 +1596,7 @@ const APPT_ABBR_MAP={"NP":"NP","CCX":"CCX","Tx":"TX","LOE":"LOE","Delivery":"DEL
         {/* Appt type menu — centered modal multi-select (ported from Master) */}
         {menu && menu.type==='appt' && (
           <div style={{position:"fixed",inset:0,background:"rgba(0,0,0,0.75)",backdropFilter:"blur(4px)",
-            zIndex:500,display:"flex",alignItems:"center",justifyContent:"center"}}
-            onMouseDown={()=>setMenu(null)}>
+            zIndex:500,display:"flex",alignItems:"center",justifyContent:"center"}}>
             <ModalMenu
               key={`${menu.op}-appt`}
               op={menu.op}

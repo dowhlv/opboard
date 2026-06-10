@@ -45,6 +45,9 @@ function loadState() {
   try {
     if (fs.existsSync(STATE_FILE)) {
       const data = JSON.parse(fs.readFileSync(STATE_FILE, 'utf8'));
+      // Snapshot the default shape before merging so we can fall back to a safe
+      // default for any individual field that loads with a corrupt type.
+      const defaults = state;
       if (data && data.ops && typeof data.ops === 'object') {
         // Defaults-first: saved data overrides defaults but new default keys are preserved
         state = {
@@ -52,6 +55,17 @@ function loadState() {
           ...data,         // saved values override defaults
           ops: {...state.ops, ...data.ops}, // merge ops (preserve any new default ops)
         };
+        // C1: guard against persisted corruption — a field loaded with the wrong
+        // type would be broadcast and crash every client (e.g. statuses.map on a
+        // non-array). Reset just that field to its safe default instead.
+        const isPlainObj = v => v && typeof v === 'object' && !Array.isArray(v);
+        if (!Array.isArray(state.statuses))      state.statuses = defaults.statuses;
+        if (!Array.isArray(state.apptTypes))     state.apptTypes = defaults.apptTypes;
+        if (!Array.isArray(state.allOps))        state.allOps = defaults.allOps;
+        if (!Array.isArray(state.customAbbrevs)) state.customAbbrevs = defaults.customAbbrevs;
+        if (!isPlainObj(state.providerDefaults)) state.providerDefaults = defaults.providerDefaults;
+        if (!isPlainObj(state.providerColors))   state.providerColors = defaults.providerColors;
+        if (!isPlainObj(state.customProcedureTally)) state.customProcedureTally = {};
         // Normalize all timestamps to numbers
         Object.keys(state.ops).forEach(k => {
           const ts = state.ops[k].ts;
@@ -102,6 +116,24 @@ function loadState() {
   }
 }
 
+// C2: crash-safe atomic write. Write to a temp file and fsync it, rename over
+// the target, then fsync the directory — so both the file contents and the
+// rename survive a power loss (the Pi runs off an SD card with no UPS).
+function writeFileAtomic(filePath, data) {
+  const tmp = filePath + '.tmp';
+  const fd = fs.openSync(tmp, 'w');
+  try {
+    fs.writeFileSync(fd, data);
+    fs.fsyncSync(fd);
+  } finally {
+    fs.closeSync(fd);
+  }
+  fs.renameSync(tmp, filePath);
+  const dfd = fs.openSync(HISTORY_DIR, 'r');
+  try { fs.fsyncSync(dfd); }
+  finally { fs.closeSync(dfd); }
+}
+
 // Save state atomically — debounced, max once per 2 seconds
 let saveTimer = null;
 function saveState() {
@@ -109,9 +141,7 @@ function saveState() {
   saveTimer = setTimeout(() => {
     saveTimer = null;
     try {
-      const tmp = STATE_FILE + '.tmp';
-      fs.writeFileSync(tmp, JSON.stringify(state, null, 2));
-      fs.renameSync(tmp, STATE_FILE);
+      writeFileAtomic(STATE_FILE, JSON.stringify(state, null, 2));
     } catch(e) { console.error('Failed to save state:', e.message); }
   }, 2000);
 }
@@ -131,9 +161,7 @@ function logHistory(op, status, apptTypes, provider) {
       }
     }
     history.push({ ts: Date.now(), op: parseInt(op), status, apptTypes: apptTypes||[], provider });
-    const tmp = HISTORY_FILE + '.tmp';
-    fs.writeFileSync(tmp, JSON.stringify(history));
-    fs.renameSync(tmp, HISTORY_FILE);
+    writeFileAtomic(HISTORY_FILE, JSON.stringify(history));
   } catch(e) { console.error('Failed to log history:', e.message); }
 }
 
@@ -147,12 +175,15 @@ function pruneHistory() {
     const before = history.length;
     history = history.filter(h => h.ts > cutoff);
     if (history.length !== before) {
-      const tmp = HISTORY_FILE + '.tmp';
-      fs.writeFileSync(tmp, JSON.stringify(history));
-      fs.renameSync(tmp, HISTORY_FILE);
+      writeFileAtomic(HISTORY_FILE, JSON.stringify(history));
       console.log(`History pruned: ${before - history.length} entries removed`);
     }
   } catch(e) { console.error('Failed to prune history:', e.message); }
+}
+// H1: local-time YYYY-MM-DD, used to record and compare the day a reset ran.
+function localDateStr(d = new Date()) {
+  const p = n => String(n).padStart(2, '0');
+  return `${d.getFullYear()}-${p(d.getMonth()+1)}-${p(d.getDate())}`;
 }
 function dailyReset() {
   try {
@@ -163,13 +194,32 @@ function dailyReset() {
       op.status = 'awaiting';
       op.apptTypes = [];
       op.note = '';
+      op.procedures = [];
+      op.needsCheckout = false;
       op.ts = null;
       op.noteUpdatedAt = null;
     });
+    state.providerOpOrder = {};
+    state.lastResetDate = localDateStr();
     saveState();
     broadcastState();
     console.log('Daily reset complete:', new Date().toISOString());
   } catch(e) { console.error('Failed daily reset:', e.message); }
+}
+// H1: if the server was down at the scheduled 00:01 reset, that reset was
+// silently skipped. On startup, run a catch-up if today's reset hasn't been
+// recorded and the clock is already past 00:01.
+function catchUpDailyReset() {
+  try {
+    const now = new Date();
+    const today = localDateStr(now);
+    const pastResetTime = now.getHours() > 0 || now.getMinutes() >= 1;
+    if (state.lastResetDate !== today && pastResetTime) {
+      console.log(`[startup] Missed daily reset (last: ${state.lastResetDate || 'never'}) — running catch-up.`);
+      pruneHistory();
+      dailyReset();
+    }
+  } catch(e) { console.error('Catch-up daily reset failed:', e.message); }
 }
 // Schedule daily reset at 00:01, recomputed each iteration to prevent drift
 function scheduleNextDailyReset() {
@@ -209,6 +259,9 @@ let state = {
   awfaPopupDismissed: {},
   opPin: '0063', // Default op tablet PIN
   queueOrder: [], // shared AWFA/ready ordering across tablets
+  providerOpOrder: {}, // per-provider custom op order: {provider: [opId,...]}; resets daily
+  lastResetDate: null, // H1: local YYYY-MM-DD of the last completed daily reset
+  customProcedureTally: {}, // {procedureName(lowercased,trimmed): count}; persists across days for admin review
 };
 loadState();
 
@@ -228,8 +281,19 @@ function enforceOpInvariant(op) {
   o.status = 'awaiting';
   o.apptTypes = [];
   o.note = '';
+  o.procedures = [];
+  o.needsCheckout = false;
   delete state.readyPopupDismissed[op];
   delete state.awfaPopupDismissed[op];
+  // Drop this op from any per-provider order array so a stale position doesn't
+  // resurface when the op is later reassigned.
+  const opNum = Number(op);
+  Object.keys(state.providerOpOrder || {}).forEach(prov => {
+    const arr = state.providerOpOrder[prov];
+    if (Array.isArray(arr)) {
+      state.providerOpOrder[prov] = arr.filter(id => Number(id) !== opNum);
+    }
+  });
 }
 
 // One-shot at boot: heal any pre-existing zombies in persisted state and prune
@@ -241,7 +305,9 @@ function cleanupOnStartup() {
     if (!o || o.provider !== null) return;
     const isZombie = o.status !== 'awaiting'
       || (Array.isArray(o.apptTypes) && o.apptTypes.length > 0)
-      || (o.note !== '' && o.note != null);
+      || (o.note !== '' && o.note != null)
+      || (Array.isArray(o.procedures) && o.procedures.length > 0)
+      || (o.needsCheckout === true);
     if (isZombie) {
       zombieOps.push(op);
       enforceOpInvariant(op);
@@ -295,6 +361,10 @@ const app = express();
 const server = http.createServer(app);
 const io = new Server(server);
 
+// H1: run a catch-up reset now if the scheduled one was missed while the
+// server was down. Placed after `io` exists since dailyReset broadcasts.
+catchUpDailyReset();
+
 // ── Shared state (source of truth) ───────────────────────────────────────────
 
 
@@ -302,26 +372,44 @@ const io = new Server(server);
 io.on('connection', socket => {
   console.log('Connected:', socket.id);
   broadcastState();
-  socket.on('requestState', () => broadcastState());
 
-  socket.on('setStatus', ({op,status}) => {
+  // C1: register every socket handler through `on` — it supplies a default
+  // {} payload (so destructuring can't throw) and try/catches the handler
+  // body, so one malformed message can never crash the process.
+  const on = (event, handler) => socket.on(event, (payload = {}) => {
+    try { handler(payload); }
+    catch (e) { console.error(`Socket handler '${event}' failed:`, e && e.message); }
+  });
+
+  on('requestState', () => broadcastState());
+
+  on('setStatus', ({op,status}) => {
     if(!isValidOp(op) || !state.ops[op]) return;
     state.ops[op].status = status;
     state.ops[op].ts = Date.now();
-    if(['awaiting','inactive'].includes(status)){ state.ops[op].apptTypes=[]; state.ops[op].note=''; }
+    // 'awaiting' is the "Vacant Clean" status (see STATUSES) — it, plus
+    // 'inactive', means the room is reset for the next patient, so clear all
+    // patient-specific fields. 'dirty' is intentionally excluded: the patient
+    // just finished and the info is still relevant while the room is cleaned.
+    if(['awaiting','inactive'].includes(status)){
+      state.ops[op].apptTypes=[];
+      state.ops[op].note='';
+      state.ops[op].procedures=[];
+      state.ops[op].needsCheckout=false;
+    }
     enforceOpInvariant(op);
     logHistory(op, state.ops[op].status, state.ops[op].apptTypes, state.ops[op].provider);
     saveState();
     broadcastState();
   });
-  socket.on('setApptType', ({op,apptTypes}) => {
+  on('setApptType', ({op,apptTypes}) => {
     if(!isValidOp(op) || !state.ops[op]) return;
     state.ops[op].apptTypes = Array.isArray(apptTypes) ? apptTypes : [];
     enforceOpInvariant(op);
     saveState();
     broadcastState();
   });
-  socket.on('setNote', ({op,note}) => {
+  on('setNote', ({op,note}) => {
     if(!isValidOp(op) || !state.ops[op]) return;
     state.ops[op].note = note;
     state.ops[op].noteUpdatedAt = Date.now();
@@ -329,29 +417,102 @@ io.on('connection', socket => {
     saveState();
     broadcastState();
   });
-  socket.on('setProviders',({activeProviders,inactiveProviders}) => { state.activeProviders=activeProviders; state.inactiveProviders=inactiveProviders; saveState(); broadcastState(); });
-  socket.on('setOpProvider',({op,provider,status,apptTypes,note}) => {
+  on('setProcedures', ({op,procedures}) => {
+    if(!isValidOp(op) || !state.ops[op]) return;
+    state.ops[op].procedures = Array.isArray(procedures) ? procedures : [];
+    enforceOpInvariant(op);
+    saveState();
+    broadcastState();
+  });
+  on('setNeedsCheckout', ({op, value}) => {
+    if (!isValidOp(op) || !state.ops[op]) return;
+    state.ops[op].needsCheckout = !!value;
+    enforceOpInvariant(op);
+    saveState();
+    broadcastState();
+  });
+  on('setProviders',({activeProviders,inactiveProviders}) => {
+    // Validate BEFORE touching state — a non-array here would corrupt state and
+    // crash every client's activeProviders.map on the next broadcast.
+    if(!Array.isArray(activeProviders) || !Array.isArray(inactiveProviders)) return;
+    state.activeProviders=activeProviders;
+    state.inactiveProviders=inactiveProviders;
+    // Unassign any op held by a provider that no longer exists in either list
+    // (e.g. deleted via Edit Providers ✕). Leaving the op assigned to a phantom
+    // provider hides it from the board yet keeps firing READY/AWFA popups.
+    const known = new Set([...(activeProviders||[]), ...(inactiveProviders||[])]);
+    Object.keys(state.ops).forEach(op => {
+      const o = state.ops[op];
+      if (o && o.provider != null && !known.has(o.provider)) {
+        o.provider = null;
+        enforceOpInvariant(op);
+      }
+    });
+    saveState();
+    broadcastState();
+  });
+  on('setOpProvider',({op,provider,status,apptTypes,note}) => {
     if(!isValidOp(op)) return;
-    if(!state.ops[op]) state.ops[op]={provider:null,status:'awaiting',apptTypes:[],note:'',ts:null,noteUpdatedAt:null};
+    if(!state.ops[op]) state.ops[op]={provider:null,status:'awaiting',apptTypes:[],note:'',procedures:[],needsCheckout:false,ts:null,noteUpdatedAt:null};
     state.ops[op].provider=provider;
     if(status!==undefined) state.ops[op].status=status;
     if(apptTypes!==undefined) state.ops[op].apptTypes=Array.isArray(apptTypes)?apptTypes:[];
     if(note!==undefined) state.ops[op].note=note;
+    // M4: the Assignments/Transfer path passes apptTypes+note to start a fresh
+    // patient. Clear procedures + needsCheckout too so the new patient doesn't
+    // inherit the previous occupant's checklist. (Drag-reassign uses reassignOp,
+    // which preserves everything and never passes these fields.)
+    if(apptTypes!==undefined && note!==undefined){
+      state.ops[op].procedures=[];
+      state.ops[op].needsCheckout=false;
+    }
     state.ops[op].ts=Date.now();
     enforceOpInvariant(op);
     saveState();
     broadcastState();
   });
-  socket.on('setStatuses', ({statuses})  => { state.statuses=statuses; saveState(); broadcastState(); });
-  socket.on('setApptTypes',({apptTypes}) => { state.apptTypes=apptTypes; saveState(); broadcastState(); });
-  socket.on('setAllOps',   ({allOps})    => { state.allOps=allOps; saveState(); broadcastState(); });
-  socket.on('setOpPin',          ({pin})      => { state.opPin=pin; saveState(); broadcastState(); });
-  socket.on('setAdminPin',       ({pin})      => { state.adminPin=pin; saveState(); broadcastState(); });
-  socket.on('setProviderDefaults',({defaults}) => { state.providerDefaults=defaults; saveState(); broadcastState(); });
-  socket.on('setProviderColors',  ({colors})   => { state.providerColors=colors; saveState(); broadcastState(); });
-  socket.on('setCustomAbbrevs',   ({abbrevs})  => { state.customAbbrevs=abbrevs; saveState(); broadcastState(); });
-  socket.on('setQueueOrder',      ({order})    => { state.queueOrder = Array.isArray(order) ? order.filter(o => isValidOp(o)).map(Number) : []; saveState(); broadcastState(); });
-  socket.on('reassignOp', ({op, provider}) => {
+  // C1: config setters reject malformed payloads (wrong type) before storing —
+  // a non-array/non-object would persist and crash every client on broadcast.
+  const isPlainObj = v => v && typeof v === 'object' && !Array.isArray(v);
+  on('setStatuses', ({statuses})  => { if(!Array.isArray(statuses)) return; state.statuses=statuses; saveState(); broadcastState(); });
+  on('setApptTypes',({apptTypes}) => { if(!Array.isArray(apptTypes)) return; state.apptTypes=apptTypes; saveState(); broadcastState(); });
+  on('setAllOps',   ({allOps})    => { if(!Array.isArray(allOps)) return; state.allOps=allOps; saveState(); broadcastState(); });
+  on('setOpPin',          ({pin})      => { state.opPin=pin; saveState(); broadcastState(); });
+  on('setAdminPin',       ({pin})      => { state.adminPin=pin; saveState(); broadcastState(); });
+  on('setProviderDefaults',({defaults}) => { if(!isPlainObj(defaults)) return; state.providerDefaults=defaults; saveState(); broadcastState(); });
+  on('setProviderColors',  ({colors})   => { if(!isPlainObj(colors)) return; state.providerColors=colors; saveState(); broadcastState(); });
+  on('setCustomAbbrevs',   ({abbrevs})  => { if(!Array.isArray(abbrevs)) return; state.customAbbrevs=abbrevs; saveState(); broadcastState(); });
+  // Custom procedure tally — count freeform ("Other") procedure additions so the
+  // admin can review which to promote to the main checklist. Persists across days.
+  on('logCustomProcedure', ({name}) => {
+    if (typeof name !== 'string') return;
+    const key = name.trim().toLowerCase();
+    if (!key) return;
+    state.customProcedureTally[key] = (state.customProcedureTally[key] || 0) + 1;
+    saveState();
+    broadcastState();
+  });
+  on('clearCustomProcedureTally', () => {
+    state.customProcedureTally = {};
+    saveState();
+    broadcastState();
+  });
+  on('removeCustomProcedureEntry', ({name}) => {
+    if (typeof name !== 'string') return;
+    const key = name.trim().toLowerCase();
+    if (!key) return;
+    delete state.customProcedureTally[key];
+    saveState();
+    broadcastState();
+  });
+  on('setQueueOrder',      ({order})    => { state.queueOrder = Array.isArray(order) ? order.filter(o => isValidOp(o)).map(Number) : []; saveState(); broadcastState(); });
+  on('setProviderOpOrder', ({provider, order}) => {
+    if (!provider || !Array.isArray(order)) return;
+    state.providerOpOrder[provider] = order;
+    saveState();
+    broadcastState();
+  });
+  on('reassignOp', ({op, provider}) => {
     // Single-field update: changes provider only. Preserves ts, status,
     // apptTypes, note, noteUpdatedAt — used by the drag-reassign UX where
     // the op keeps its place in queues and keeps every other piece of state.
@@ -367,28 +528,48 @@ io.on('connection', socket => {
 
   // Note locking — broadcast to all OTHER clients (not sender). Carry op id so
   // clients can scope lock state by op (multiple ops may be edited concurrently).
-  socket.on('noteLock',   ({op,by}) => { if(isValidOp(op)) socket.broadcast.emit('noteLock',   {op:Number(op),by}); });
-  socket.on('noteUnlock', ({op}={}) => { if(op===undefined || isValidOp(op)) socket.broadcast.emit('noteUnlock', {op:op===undefined?null:Number(op)}); });
-  socket.on('dismissReadyPopup',        ({op}) => { if(!isValidOp(op)) return; state.readyPopupDismissed[op]=Date.now(); saveState(); broadcastState(); });
-  socket.on('clearReadyPopupDismissed', ({op}) => { if(!isValidOp(op)) return; delete state.readyPopupDismissed[op]; saveState(); broadcastState(); });
-  socket.on('dismissAwfaPopup',         ({op}) => { if(!isValidOp(op)) return; state.awfaPopupDismissed[op]=Date.now(); saveState(); broadcastState(); });
-  socket.on('clearAwfaPopupDismissed',  ({op}) => { if(!isValidOp(op)) return; delete state.awfaPopupDismissed[op]; saveState(); broadcastState(); });
-  socket.on('disconnect', () => console.log('Disconnected:', socket.id));
+  // M3: track the op this socket currently holds locked so a mid-edit disconnect
+  // can release it — otherwise other devices stay locked out forever.
+  let lockedOp = null;
+  on('noteLock',   ({op,by}) => { if(isValidOp(op)){ lockedOp=Number(op); socket.broadcast.emit('noteLock', {op:Number(op),by}); } });
+  on('noteUnlock', ({op}={}) => {
+    if(op===undefined || isValidOp(op)){
+      if(op===undefined || Number(op)===lockedOp) lockedOp=null;
+      socket.broadcast.emit('noteUnlock', {op:op===undefined?null:Number(op)});
+    }
+  });
+  on('dismissReadyPopup',        ({op}) => { if(!isValidOp(op)) return; state.readyPopupDismissed[op]=Date.now(); saveState(); broadcastState(); });
+  on('clearReadyPopupDismissed', ({op}) => { if(!isValidOp(op)) return; delete state.readyPopupDismissed[op]; saveState(); broadcastState(); });
+  on('dismissAwfaPopup',         ({op}) => { if(!isValidOp(op)) return; state.awfaPopupDismissed[op]=Date.now(); saveState(); broadcastState(); });
+  on('clearAwfaPopupDismissed',  ({op}) => { if(!isValidOp(op)) return; delete state.awfaPopupDismissed[op]; saveState(); broadcastState(); });
+  on('disconnect', () => {
+    // M3: if this socket dropped while holding a note lock, release it so other
+    // devices clear their lock indicator instead of staying locked out forever.
+    if(lockedOp!=null) socket.broadcast.emit('noteUnlock', {op:lockedOp});
+    console.log('Disconnected:', socket.id);
+  });
 });
 
 // Flush pending state on shutdown so nothing within the 2s debounce window is lost.
 function flushAndExit() {
   if (saveTimer) { clearTimeout(saveTimer); saveTimer = null; }
   try {
-    const tmp = STATE_FILE + '.tmp';
-    fs.writeFileSync(tmp, JSON.stringify(state, null, 2));
-    fs.renameSync(tmp, STATE_FILE);
+    writeFileAtomic(STATE_FILE, JSON.stringify(state, null, 2));
     console.log('State flushed on exit.');
   } catch(e) { console.error('Flush failed:', e.message); }
   process.exit(0);
 }
 process.on('SIGTERM', flushAndExit);
 process.on('SIGINT',  flushAndExit);
+
+// C1: keep the process alive if an error escapes a handler or a promise
+// rejects unhandled — log it instead of letting Node exit.
+process.on('uncaughtException', (e) => {
+  console.error('UNCAUGHT EXCEPTION:', (e && e.stack) || e);
+});
+process.on('unhandledRejection', (reason) => {
+  console.error('UNHANDLED REJECTION:', reason);
+});
 
 // ── Serve static files + catch-all for SPA routing ───────────────────────────
 // Send an HTML file with {{VERSION}} replaced by SERVER_VERSION. Disables
