@@ -524,7 +524,7 @@ function TVDisplay() {
         <div style={S.header}>
           <img src="/dentists-logo.webp" alt="Dentists of West Henderson" height="44" style={{display:"block",flexShrink:0}}/>
           <div style={{flex:1,display:"flex",flexDirection:"column",alignItems:"center",justifyContent:"center"}}>
-            <div style={S.headerTitle}>OPBOARD</div>
+            <div style={S.headerTitle}>PATIENT BOARD</div>
             <div style={{fontFamily:"'DM Sans',sans-serif",fontSize:"11px",letterSpacing:"0.18em",color:"rgba(255,255,255,0.3)",fontWeight:600,marginTop:"2px"}}>TV</div>
           </div>
           <div style={{display:"flex",alignItems:"center",gap:"12px",flexShrink:0}}>
