@@ -581,7 +581,7 @@ function TVDisplay() {
             const apptSize =`clamp(20px,${6.6/safeN*rowScale}vw,120px)`;
             const noteSize =`clamp(20px,${5/safeN*rowScale}vw,80px)`;
             const timerSize=`clamp(14px,${3/safeN*rowScale}vw,50px)`;
-            const nameSize =`clamp(48px,${10/safeN}vw,144px)`;
+            const nameSize =`clamp(24px,${5/safeN}vw,72px)`;
             const provColor=providerColors?.[name]||'#fff';
             return(
               <div key={name} style={S.providerCol}>
