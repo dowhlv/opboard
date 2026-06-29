@@ -576,11 +576,11 @@ function TVDisplay() {
             const safeN=Math.max(n,1);
             const maxRooms=Math.max(rooms.length,3);
             const rowScale=3/maxRooms;
-            const numSize  =`clamp(60px,${30/safeN*rowScale}vw,480px)`;
+            const numSize  =`clamp(60px,${20/safeN*rowScale}vw,480px)`;
             const badgeSize=`clamp(33px,${14.4/safeN*rowScale}vw,240px)`;
-            const apptSize =`clamp(20px,${6.6/safeN*rowScale}vw,120px)`;
-            const noteSize =`clamp(20px,${5/safeN*rowScale}vw,80px)`;
-            const timerSize=`clamp(14px,${3/safeN*rowScale}vw,50px)`;
+            const apptSize =`clamp(20px,${4.4/safeN*rowScale}vw,120px)`;
+            const noteSize =`clamp(20px,${5/safeN*rowScale}vw,60px)`;
+            const timerSize=`clamp(14px,${2/safeN*rowScale}vw,50px)`;
             const nameSize =`clamp(24px,${5/safeN}vw,72px)`;
             const provColor=providerColors?.[name]||'#fff';
             return(
