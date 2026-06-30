@@ -298,7 +298,7 @@ function ModalMenu({op, ops, onClose, onSetApptType, statuses, apptTypes}){
 
 // Queue Item — hold-to-drag for reorder. Drag visuals (transform, snap-back)
 // are driven by the parent's `drag` state.
-function QueueItem({item,ops,drag,primeDrag,cancelHold,maybePromoteOnMove}){
+function QueueItem({item,ops,drag,shift,primeDrag,cancelHold,maybePromoteOnMove}){
   const{op,type}=item;
   const cfg=type==="awfa"?SM.pending:SM.ready;
   const isQDragged = drag?.kind==='queue' && drag.itemId===item.id;
@@ -307,7 +307,7 @@ function QueueItem({item,ops,drag,primeDrag,cancelHold,maybePromoteOnMove}){
   return(
     <div data-queue-item-id={item.id}
       style={{position:"relative",borderRadius:"10px",border:`2px solid ${cfg.numColor}`,background:cfg.bg,marginBottom:"8px",userSelect:"none",
-        transform: isQDragged ? `translate(${qtx}px, ${qty}px)` : "none",
+        transform: isQDragged ? `translate(${qtx}px, ${qty}px)` : (shift || "none"),
         transition: isQDragged ? "none" : "transform .2s",
         boxShadow: isQDragged ? "0 12px 32px rgba(0,0,0,0.6)" : "none",
         zIndex: isQDragged ? 1000 : "auto",
@@ -571,6 +571,14 @@ function FrontDeskTablet(){
   const reorderOriginalRef=useRef(null);
   const reorderSlotsRef=useRef(null);
   const reorderStartCenterRef=useRef(null);
+  // AWFA queue reorder: same committed-order geometry model as the column
+  // reorder above, but for the Awaiting-FA queue modal rows. queueDragOrder is
+  // the live slide preview; the refs mirror reorder* for synchronous reads on drop.
+  const [queueDragOrder,setQueueDragOrder]=useState(null);
+  const queueOrderRef=useRef(null);
+  const queueOriginalRef=useRef(null);
+  const queueSlotsRef=useRef(null);
+  const queueStartCenterRef=useRef(null);
   useEffect(()=>{dragRef.current=drag;},[drag]);
   useEffect(()=>{dragOverColRef.current=dragOverCol;},[dragOverCol]);
   useEffect(()=>{dragOverIdRef.current=dragOverId;},[dragOverId]);
@@ -872,6 +880,19 @@ function sortProcedures(procs){
       reorderStartCenterRef.current = k0 >= 0 ? centers[k0] : p.startY;
       setReorderOrder(order.slice());
     }
+    // Queue: capture the AWFA queue rows' order + fixed slot-center Ys now, while
+    // they're still in their pre-drag positions (parallels the reorder block).
+    if (p.kind === 'queue') {
+      const rows = Array.from(document.querySelectorAll('[data-queue-item-id]'));
+      const order = rows.map(el => Number(el.getAttribute('data-queue-item-id')));
+      const centers = rows.map(el => { const r = el.getBoundingClientRect(); return r.top + r.height / 2; });
+      const k0 = order.indexOf(p.payload.itemId);
+      queueOriginalRef.current = order.slice();
+      queueOrderRef.current = order.slice();
+      queueSlotsRef.current = centers;
+      queueStartCenterRef.current = k0 >= 0 ? centers[k0] : p.startY;
+      setQueueDragOrder(order.slice());
+    }
     setDrag({
       kind: p.kind, ...p.payload,
       startX: p.startX, startY: p.startY,
@@ -973,22 +994,27 @@ function sortProcedures(procs){
           }
           if (changed) setReorderOrder(committed.slice());
         }
-      } else {
-        const el = document.elementFromPoint(x, y);
-        let qi = el?.closest('[data-queue-item-id]');
-        // If nothing matched but the pointer is below the last row, treat it as a
-        // drop on the last visible queue item (so "drop past the end" lands at end).
-        if (!qi) {
-          const items = document.querySelectorAll('[data-queue-item-id]');
-          if (items.length) {
-            const last = items[items.length - 1];
-            const r = last.getBoundingClientRect();
-            if (y > r.bottom) qi = last;
+      } else if (cur.kind === 'queue') {
+        // Same committed-midpoint model as 'reorder' above, applied to the AWFA
+        // queue rows: the dragged row's center (start center + pointer delta)
+        // swaps past adjacent rows' fixed centers. queueDragOrder drives the live
+        // slide preview; queueOrderRef is read on drop. No elementFromPoint.
+        const committed = queueOrderRef.current;
+        const slots = queueSlotsRef.current;
+        if (committed && slots && slots.length) {
+          const draggedCenterY = queueStartCenterRef.current + (y - cur.startY);
+          let k = committed.indexOf(cur.itemId);
+          let changed = false;
+          while (k > 0 && draggedCenterY < slots[k - 1]) {
+            const tmp = committed[k - 1]; committed[k - 1] = committed[k]; committed[k] = tmp;
+            k--; changed = true;
           }
+          while (k < committed.length - 1 && draggedCenterY > slots[k + 1]) {
+            const tmp = committed[k + 1]; committed[k + 1] = committed[k]; committed[k] = tmp;
+            k++; changed = true;
+          }
+          if (changed) setQueueDragOrder(committed.slice());
         }
-        const nextOver = qi ? Number(qi.getAttribute('data-queue-item-id')) : null;
-        dragOverIdRef.current = nextOver;
-        setDragOverId(nextOver);
       }
     };
     const onUp = () => {
@@ -1011,18 +1037,14 @@ function sortProcedures(procs){
             emitSocket('setProviderOpOrder', { provider: cur.sourceProvider, order: arr });
           }
         } else if (cur.kind === 'queue') {
-          const overId = dragOverIdRef.current;
-          if (overId !== null && overId !== cur.itemId) {
-            setQueueOrder(prev => {
-              const arr = [...prev];
-              const fromIdx = arr.indexOf(cur.itemId);
-              const toIdx   = arr.indexOf(overId);
-              if (fromIdx < 0 || toIdx < 0) return prev;
-              const [moved] = arr.splice(fromIdx, 1);
-              arr.splice(toIdx, 0, moved);
-              emitSocket('setQueueOrder', { order: arr });
-              return arr;
-            });
+          // Drop: persist the final committed order if it changed (mirrors the
+          // 'reorder' commit). Unconditional save + emit so it never snaps back.
+          const committed = queueOrderRef.current;
+          const original = queueOriginalRef.current;
+          if (committed && original && committed.join(',') !== original.join(',')) {
+            const arr = committed.slice();
+            setQueueOrder(arr);
+            emitSocket('setQueueOrder', { order: arr });
           }
         }
       }
@@ -1034,6 +1056,11 @@ function sortProcedures(procs){
       reorderSlotsRef.current = null;
       reorderStartCenterRef.current = null;
       setReorderOrder(null);
+      queueOrderRef.current = null;
+      queueOriginalRef.current = null;
+      queueSlotsRef.current = null;
+      queueStartCenterRef.current = null;
+      setQueueDragOrder(null);
     };
     window.addEventListener('mousemove', onMove);
     window.addEventListener('mouseup',   onUp);
@@ -1620,13 +1647,28 @@ function sortProcedures(procs){
             </div>
             <div style={{fontSize:"11px",letterSpacing:"0.1em",color:"rgba(255,255,255,0.3)",fontFamily:"'DM Sans',sans-serif",marginBottom:"4px"}}>DRAG ↕ TO REORDER URGENCY · STATUS CHANGE REMOVES OP FROM QUEUE</div>
             <div style={{flex:1,overflowY:"auto"}}>
-              {popups.map(item=>(
+              {popups.map((item,i)=>{
+                // Live slide preview: each non-dragged row shifts one slot to
+                // mirror queueDragOrder vs its committed display index i (parallels
+                // the column reorder's translateY shift). popups order is stable
+                // during a drag (queueOrder commits only on drop), so i is the
+                // original display index.
+                let shift="";
+                if(drag?.kind==='queue'&&queueDragOrder&&drag.itemId!==item.id){
+                  const j=queueDragOrder.indexOf(item.id);
+                  if(j>=0){
+                    if(j<i) shift="translateY(-100%)";
+                    else if(j>i) shift="translateY(100%)";
+                  }
+                }
+                return(
                 <QueueItem key={item.id} item={item} ops={ops}
-                  drag={drag}
+                  drag={drag} shift={shift}
                   primeDrag={primeDrag}
                   cancelHold={cancelHold}
                   maybePromoteOnMove={maybePromoteOnMove}/>
-              ))}
+                );
+              })}
             </div>
           </div>
         )}
