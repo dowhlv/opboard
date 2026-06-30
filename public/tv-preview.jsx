@@ -576,7 +576,7 @@ function TVDisplay() {
             const safeN=Math.max(n,1);
             const maxRooms=Math.max(rooms.length,3);
             const rowScale=3/maxRooms;
-            const numSize  =`clamp(60px,${20/safeN*rowScale}vw,480px)`;
+            const numSize  =`clamp(60px,${15/safeN*rowScale}vw,480px)`;
             const badgeSize=`clamp(33px,${14.4/safeN*rowScale}vw,240px)`;
             const apptSize =`clamp(20px,${4.4/safeN*rowScale}vw,120px)`;
             const noteSize =`clamp(20px,${5/safeN*rowScale}vw,60px)`;
