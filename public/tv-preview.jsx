@@ -640,7 +640,7 @@ function TVDisplay() {
                                   {procedures.length>0&&(
                                     <div style={{display:"grid",gridTemplateColumns:`repeat(${procedures.length>=10?4:3},1fr)`,gap:"4px"}}>
                                       {sortProcedures(procedures).map(p=>(
-                                        <span key={p.code} style={{display:"block",width:"100%",boxSizing:"border-box",textAlign:"center",padding:"2px 7px",borderRadius:"5px",fontSize:"clamp(10px,1vw,14px)",fontWeight:800,letterSpacing:"0.04em",lineHeight:1.2,whiteSpace:"nowrap",
+                                        <span key={p.code} style={{display:"block",width:"100%",boxSizing:"border-box",textAlign:"center",padding:"6px 21px",borderRadius:"15px",fontSize:"clamp(30px,3vw,42px)",fontWeight:800,letterSpacing:"0.04em",lineHeight:1.2,whiteSpace:"nowrap",
                                           background:p.done?"rgba(255,80,80,0.22)":"rgba(74,222,128,0.22)",
                                           border:`1px solid ${p.done?"rgba(255,80,80,0.6)":"rgba(74,222,128,0.6)"}`,
                                           color:p.done?"#ff6b6b":"#4ade80"}}>{p.code}</span>
