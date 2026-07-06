@@ -116,6 +116,20 @@ const DEMO={1:{status:"ready",note:"New patient",ts:new Date(Date.now()-120000),
   9:{status:"awaiting", note:"",               ts:new Date(Date.now()-180000),  apptTypes:[],  provider:"Dr. Ngo" },10:{status:"pending",note:"SRP Q2",ts:new Date(Date.now()-360000),apptTypes:["SRP"],provider:"Dr. Ngo"},11:{status:"treatment",note:"Root canal",ts:new Date(Date.now()-2100000),apptTypes:["Tx"],provider:"Jordan"},12:{status:"awaiting", note:"",               ts:new Date(Date.now()-30000),   apptTypes:["OV"],  provider:"Jordan"  },
   13:{status:"awaiting", note:"",               ts:new Date(Date.now()-90000),   apptTypes:[],  provider:"Jordan"  },14:{status:"fa",note:"Whitening",ts:new Date(Date.now()-600000),apptTypes:["LOE"],provider:"Jordan"}};
 const PROVIDERS=["Dr. Tang","Dr. Ngo","Jordan"];
+const PROCEDURE_LIBRARY=[
+  {section:"GP", groups:[
+    {label:"Exam",      items:[{code:"NP",name:"New Patient"},{code:"CCX",name:"Exam"},{code:"LOE",name:"Ltd Oral Exam"},{code:"OV",name:"Office Visit"},{code:"PO",name:"Post-Op"},{code:"CON",name:"Consult"},{code:"PRB",name:"Probe"},{code:"DRX",name:"Doctor Review"}]},
+    {label:"Direct",    items:[{code:"FIL",name:"Fill"},{code:"CUR",name:"Curodont"},{code:"SEA",name:"Sealant"},{code:"ENP",name:"Enamelplasty"}]},
+    {label:"Indirect",  items:[{code:"CRN",name:"Crown"},{code:"BR",name:"Bridge"},{code:"INL",name:"Inlay"},{code:"ONL",name:"Onlay"},{code:"IDEL",name:"Indirect Del"},{code:"TMP",name:"Temporary"},{code:"REC",name:"Recement"}]},
+    {label:"Removable", items:[{code:"NGSN",name:"Nightguard Scan"},{code:"RTSN",name:"Retainer Scan"},{code:"DESN",name:"Denture Scan"},{code:"WAX",name:"Wax Rims"},{code:"FRM",name:"Framework"},{code:"TIWT",name:"Try-in w/ Teeth"},{code:"RDEL",name:"Removable Del"}]},
+    {label:"Anesthesia", items:[{code:"ANSTH", name:"Anesthetize"}]},
+  ]},
+  {section:"HYG",   groups:[{label:null, items:[{code:"PRO",name:"Prophy"},{code:"POL",name:"Polish"},{code:"SRP",name:"Scaling & RP"},{code:"PMT",name:"Perio Maintenance"},{code:"ADJ",name:"Adjunct"},{code:"ARS",name:"Arrestin"}]}]},
+  {section:"OS",    groups:[{label:null, items:[{code:"XBM",name:"Ext+Graft+Mem"},{code:"EXT",name:"Extraction"},{code:"BM",name:"Graft+Mem"},{code:"SUT",name:"Suture"},{code:"IMP",name:"Implant"},{code:"SEC",name:"2nd Stage"},{code:"IMSN",name:"Implant Crown Scan"}]}]},
+  {section:"Endo",  groups:[{label:null, items:[{code:"PDEB",name:"Pulp Debride"}]}]},
+  {section:"Ortho", groups:[{label:null, items:[{code:"SPK",name:"Spark Consult"},{code:"ATT",name:"Spark Attachment"},{code:"ALI",name:"Aligner Delivery"}]}]},
+  {section:"X-Ray", groups:[{label:null, items:[{code:"XRY",name:"X-Ray"},{code:"CT",name:"CBCT"},{code:"BW",name:"Bitewing"},{code:"PA",name:"Periapical"},{code:"IOP",name:"Intra-oral Photos"}]}]},
+];
 const INIT_ALL_OPS = Object.keys(DEMO).map(Number).map(id=>({id,enabled:true}));
 // 10-minute "stuck" reminder configuration, used by both the periodic check
 // effect and the inline reminder-dismiss onClick. Must be module-scope so both
@@ -657,20 +671,6 @@ function FrontDeskTablet(){
   },[]);
   const APPT_TYPES=["NP","CCX","Tx","LOE","Delivery","Office Visit","Prophy","PMT","SRP"];
 const APPT_ABBR_MAP={"NP":"NP","CCX":"CCX","Tx":"TX","LOE":"LOE","Delivery":"DEL","Office Visit":"OV","Prophy":"PRO","PMT":"PMT","SRP":"SRP"};
-const PROCEDURE_LIBRARY=[
-  {section:"GP", groups:[
-    {label:"Exam",      items:[{code:"NP",name:"New Patient"},{code:"CCX",name:"Exam"},{code:"LOE",name:"Ltd Oral Exam"},{code:"OV",name:"Office Visit"},{code:"PO",name:"Post-Op"},{code:"CON",name:"Consult"},{code:"PRB",name:"Probe"},{code:"DRX",name:"Doctor Review"}]},
-    {label:"Direct",    items:[{code:"FIL",name:"Fill"},{code:"CUR",name:"Curodont"},{code:"SEA",name:"Sealant"},{code:"ENP",name:"Enamelplasty"}]},
-    {label:"Indirect",  items:[{code:"CRN",name:"Crown"},{code:"BR",name:"Bridge"},{code:"INL",name:"Inlay"},{code:"ONL",name:"Onlay"},{code:"IDEL",name:"Indirect Del"},{code:"TMP",name:"Temporary"},{code:"REC",name:"Recement"}]},
-    {label:"Removable", items:[{code:"NGSN",name:"Nightguard Scan"},{code:"RTSN",name:"Retainer Scan"},{code:"DESN",name:"Denture Scan"},{code:"WAX",name:"Wax Rims"},{code:"FRM",name:"Framework"},{code:"TIWT",name:"Try-in w/ Teeth"},{code:"RDEL",name:"Removable Del"}]},
-    {label:"Anesthesia", items:[{code:"ANSTH", name:"Anesthetize"}]},
-  ]},
-  {section:"HYG",   groups:[{label:null, items:[{code:"PRO",name:"Prophy"},{code:"POL",name:"Polish"},{code:"SRP",name:"Scaling & RP"},{code:"PMT",name:"Perio Maintenance"},{code:"ADJ",name:"Adjunct"},{code:"ARS",name:"Arrestin"}]}]},
-  {section:"OS",    groups:[{label:null, items:[{code:"XBM",name:"Ext+Graft+Mem"},{code:"EXT",name:"Extraction"},{code:"BM",name:"Graft+Mem"},{code:"SUT",name:"Suture"},{code:"IMP",name:"Implant"},{code:"SEC",name:"2nd Stage"},{code:"IMSN",name:"Implant Crown Scan"}]}]},
-  {section:"Endo",  groups:[{label:null, items:[{code:"PDEB",name:"Pulp Debride"}]}]},
-  {section:"Ortho", groups:[{label:null, items:[{code:"SPK",name:"Spark Consult"},{code:"ATT",name:"Spark Attachment"},{code:"ALI",name:"Aligner Delivery"}]}]},
-  {section:"X-Ray", groups:[{label:null, items:[{code:"XRY",name:"X-Ray"},{code:"CT",name:"CBCT"},{code:"BW",name:"Bitewing"},{code:"PA",name:"Periapical"},{code:"IOP",name:"Intra-oral Photos"}]}]},
-];
 const APPT_PREPOPULATE = {
   "NP":           [{code:"NP",name:"New Patient"},{code:"XRY",name:"X-Ray"},{code:"PRB",name:"Probe"}],
   "CCX":          [{code:"CCX",name:"Exam"},{code:"XRY",name:"X-Ray"},{code:"PRB",name:"Probe"}],
