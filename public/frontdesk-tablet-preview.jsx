@@ -118,10 +118,10 @@ const DEMO={1:{status:"ready",note:"New patient",ts:new Date(Date.now()-120000),
 const PROVIDERS=["Dr. Tang","Dr. Ngo","Jordan"];
 const PROCEDURE_LIBRARY=[
   {section:"GP", groups:[
-    {label:"Exam",      items:[{code:"NP",name:"New Patient"},{code:"CCX",name:"Exam"},{code:"LOE",name:"Ltd Oral Exam"},{code:"OV",name:"Office Visit"},{code:"PO",name:"Post-Op"},{code:"CON",name:"Consult"},{code:"PRB",name:"Probe"},{code:"DRX",name:"Doctor Review"}]},
+    {label:"Exam",      items:[{code:"EXM",name:"Exam"},{code:"PRB",name:"Probe"}]},
     {label:"Direct",    items:[{code:"FIL",name:"Fill"},{code:"CUR",name:"Curodont"},{code:"SEA",name:"Sealant"},{code:"ENP",name:"Enamelplasty"}]},
     {label:"Indirect",  items:[{code:"CRN",name:"Crown"},{code:"BR",name:"Bridge"},{code:"INL",name:"Inlay"},{code:"ONL",name:"Onlay"},{code:"IDEL",name:"Indirect Del"},{code:"TMP",name:"Temporary"},{code:"REC",name:"Recement"}]},
-    {label:"Removable", items:[{code:"NGSN",name:"Nightguard Scan"},{code:"RTSN",name:"Retainer Scan"},{code:"DESN",name:"Denture Scan"},{code:"WAX",name:"Wax Rims"},{code:"FRM",name:"Framework"},{code:"TIWT",name:"Try-in w/ Teeth"},{code:"RDEL",name:"Removable Del"}]},
+    {label:"Removable", items:[{code:"NGSN",name:"Nightguard Scan"},{code:"RTSN",name:"Retainer Scan"},{code:"DNSN",name:"Denture Scan"},{code:"WAX",name:"Wax Rims"},{code:"FRM",name:"Framework"},{code:"TIWT",name:"Try-in w/ Teeth"},{code:"DDEL",name:"Denture Delivery"},{code:"RDEL",name:"RPD Delivery"}]},
     {label:"Anesthesia", items:[{code:"ANSTH", name:"Anesthetize"}]},
   ]},
   {section:"HYG",   groups:[{label:null, items:[{code:"PRO",name:"Prophy"},{code:"POL",name:"Polish"},{code:"SRP",name:"Scaling & RP"},{code:"PMT",name:"Perio Maintenance"},{code:"ADJ",name:"Adjunct"},{code:"ARS",name:"Arrestin"}]}]},
@@ -672,12 +672,12 @@ function FrontDeskTablet(){
   const APPT_TYPES=["NP","CCX","Tx","LOE","Delivery","Office Visit","Prophy","PMT","SRP"];
 const APPT_ABBR_MAP={"NP":"NP","CCX":"CCX","Tx":"TX","LOE":"LOE","Delivery":"DEL","Office Visit":"OV","Prophy":"PRO","PMT":"PMT","SRP":"SRP"};
 const APPT_PREPOPULATE = {
-  "NP":           [{code:"NP",name:"New Patient"},{code:"XRY",name:"X-Ray"},{code:"PRB",name:"Probe"}],
-  "CCX":          [{code:"CCX",name:"Exam"},{code:"XRY",name:"X-Ray"},{code:"PRB",name:"Probe"}],
+  "NP":           [{code:"EXM",name:"Exam"},{code:"XRY",name:"X-Ray"},{code:"PRB",name:"Probe"}],
+  "CCX":          [{code:"EXM",name:"Exam"},{code:"XRY",name:"X-Ray"},{code:"PRB",name:"Probe"}],
   "Tx":           [],
-  "LOE":          [{code:"LOE",name:"Ltd Oral Exam"},{code:"CT",name:"CBCT"},{code:"BW",name:"Bitewing"},{code:"PA",name:"Periapical"}],
+  "LOE":          [{code:"EXM",name:"Exam"},{code:"CT",name:"CBCT"},{code:"BW",name:"Bitewing"},{code:"PA",name:"Periapical"}],
   "Delivery":     [],
-  "Office Visit": [{code:"OV",name:"Office Visit"}],
+  "Office Visit": [{code:"EXM",name:"Exam"}],
   "Prophy":       [{code:"PRO",name:"Prophy"},{code:"POL",name:"Polish"}],
   "PMT":          [{code:"PMT",name:"Perio Maintenance"},{code:"POL",name:"Polish"}],
   "SRP":          [{code:"SRP",name:"Scaling & RP"},{code:"POL",name:"Polish"},{code:"ADJ",name:"Adjunct"}],
