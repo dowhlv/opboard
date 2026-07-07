@@ -684,7 +684,7 @@ const APPT_PREPOPULATE = {
 };
 function prepopulateFromApptTypes(apptTypes){
   const out=[]; const seen=new Set();
-  (apptTypes||[]).forEach(t=>(APPT_PREPOPULATE[t]||[]).forEach(p=>{if(!seen.has(p.code)){seen.add(p.code);out.push({code:p.code,name:p.name,done:false,doneAt:null});}}));
+  (apptTypes||[]).forEach(t=>(APPT_PREPOPULATE[t]||[]).forEach(p=>{if(!seen.has(p.code)){seen.add(p.code);out.push({code:p.code,name:p.name,done:false,doneAt:null,auto:true});}}));
   return out;
 }
 function applySaveTriggers(procs,openProcs){
@@ -734,16 +734,26 @@ function sortProcedures(procs){
     setOps(p=>({...p,[op]:{...p[op],apptTypes:nt}}));
     emitSocket('setApptType',{op,apptTypes:nt});
     // M9: merge in prepopulate procedures for any NEWLY ADDED appt type (deduped
-    // by code). Removing an appt type never touches procedures; existing
-    // procedures are never clobbered or removed.
+    // by code). Auto-populated pills carry auto:true (see prepopulateFromApptTypes)
+    // so the deselect-prune below can distinguish them from manual pills.
     const added=nt.filter(x=>!oldTypes.includes(x));
+    const removed=oldTypes.filter(x=>!nt.includes(x));
+    const cur=ops[op]?.procedures||[];
+    let next=[...cur]; let changed=false;
     if(added.length>0){
-      const cur=ops[op]?.procedures||[];
-      const have=new Set(cur.map(p=>p.code));
-      const merged=[...cur];
-      prepopulateFromApptTypes(added).forEach(p=>{if(!have.has(p.code)){have.add(p.code);merged.push(p);}});
-      if(merged.length!==cur.length) updateProcedures(op,merged);
+      const have=new Set(next.map(p=>p.code));
+      prepopulateFromApptTypes(added).forEach(p=>{if(!have.has(p.code)){have.add(p.code);next.push(p);changed=true;}});
     }
+    // Deselect-prune: dropping an appt type removes the pills it auto-populated,
+    // UNLESS the pill is manual (!auto — also covers legacy pills with no auto
+    // field), completed (done), or its code is still provided by a currently-
+    // selected appt type.
+    if(removed.length>0){
+      const stillProvided=new Set(prepopulateFromApptTypes(nt).map(p=>p.code));
+      const pruned=next.filter(p=>(!p.auto)||p.done||stillProvided.has(p.code));
+      if(pruned.length!==next.length){next=pruned;changed=true;}
+    }
+    if(changed) updateProcedures(op,next);
     // No toast on individual toggle — keep menu open for multi-select; DONE button closes.
   };
 
