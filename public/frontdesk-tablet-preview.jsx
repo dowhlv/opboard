@@ -119,9 +119,9 @@ const PROVIDERS=["Dr. Tang","Dr. Ngo","Jordan"];
 const PROCEDURE_LIBRARY=[
   {section:"GP", groups:[
     {label:"Exam",      items:[{code:"EXM",name:"Exam"},{code:"PRB",name:"Probe"}]},
-    {label:"Direct",    items:[{code:"FIL",name:"Fill"},{code:"CUR",name:"Curodont"},{code:"SEA",name:"Sealant"},{code:"ENP",name:"Enamelplasty"}]},
+    {label:"Direct",    items:[{code:"FIL",name:"Fill"},{code:"CUR",name:"Curodont"},{code:"SEA",name:"Sealant"},{code:"ENP",name:"Enamelplasty"},{code:"BTAD",name:"Bite Adjust"}]},
     {label:"Indirect",  items:[{code:"CRN",name:"Crown"},{code:"BR",name:"Bridge"},{code:"INL",name:"Inlay"},{code:"ONL",name:"Onlay"},{code:"IDEL",name:"Indirect Del"},{code:"TMP",name:"Temporary"},{code:"REC",name:"Recement"}]},
-    {label:"Removable", items:[{code:"NGSN",name:"Nightguard Scan"},{code:"RTSN",name:"Retainer Scan"},{code:"DNSN",name:"Denture Scan"},{code:"WAX",name:"Wax Rims"},{code:"FRM",name:"Framework"},{code:"TIWT",name:"Try-in w/ Teeth"},{code:"DDEL",name:"Denture Delivery"},{code:"RDEL",name:"RPD Delivery"}]},
+    {label:"Removable", items:[{code:"NGSN",name:"Nightguard Scan"},{code:"RTSN",name:"Retainer Scan"},{code:"DNSN",name:"Denture Scan"},{code:"WAX",name:"Wax Rims"},{code:"FRM",name:"Framework"},{code:"TIWT",name:"Try-in w/ Teeth"},{code:"DDEL",name:"Denture Delivery"},{code:"RDEL",name:"RPD Delivery"},{code:"NDEL",name:"NG Delivery"},{code:"ADJS",name:"Adjust"}]},
     {label:"Anesthesia", items:[{code:"ANSTH", name:"Anesthetize"}]},
   ]},
   {section:"HYG",   groups:[{label:null, items:[{code:"PRO",name:"Prophy"},{code:"POL",name:"Polish"},{code:"SRP",name:"Scaling & RP"},{code:"PMT",name:"Perio Maintenance"},{code:"ADJ",name:"Adjunct"},{code:"ARS",name:"Arrestin"}]}]},
