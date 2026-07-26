@@ -619,7 +619,8 @@ The version stamp / cache-busting design dictates what a change requires:
 - `package.json` / dependency changes.
 - Anything that must change `SERVER_VERSION` deterministically at process start (the git hash is captured once at boot, line 14).
 
-**Requires only a browser refresh (no restart), BUT note the auto-reload chain:**
+**Reaches ONE device on a hard refresh; reaches ALL devices only after a restart
+(NOT "only a browser refresh" — see Gotcha 2 below):**
 - Editing a `public/*.jsx`, `public/*.html`, or `dentists-logo.webp` does **not**
   require a restart to be *served* (static middleware serves files fresh from
   disk; HTML is sent with `Cache-Control: no-store`, line 583). However, open
@@ -635,9 +636,11 @@ The version stamp / cache-busting design dictates what a change requires:
     restart, `SERVER_VERSION` is unchanged and connected tablets will not
     auto-reload.
 
-Net: **JSX/HTML/asset content edits are picked up by a hard browser refresh
-alone; to force every connected tablet to auto-reload, commit and
-`sudo systemctl restart opboard` so the broadcast `version` changes.**
+Net: **a JSX/HTML/asset content edit is picked up by a hard browser refresh on
+the single device you refresh, but every OTHER connected tablet keeps its cached
+module until you commit and `sudo systemctl restart opboard` — the `?v=`
+cache-buster and the broadcast `version` are both frozen at process start, so
+nothing re-fetches or auto-reloads without a restart. See Gotcha 2.**
 
 ---
 
@@ -689,6 +692,32 @@ alone; to force every connected tablet to auto-reload, commit and
   `STATUSES` constant for status abbreviations (they do not call `setStatuses` on
   incoming state for their own labels — FD/tv/op ignore `state.statuses`), so a
   status renamed in the admin menu updates master but not FD/TV/op labels.
+
+---
+
+## GOTCHAS LEARNED 2026-07-25
+
+1. **Copying files directly to the Pi (scp/USB) silently desynchronizes git.**
+   The working tree changes but `HEAD` does not, so `git status` reports the
+   files as locally modified — and it's then ambiguous whether they are genuine
+   unsaved work or already-committed content that arrived out of band. Happened
+   2026-07-07 during the network outage; discovered 2026-07-25.
+   **Detection:** `git status --short` in `~/opboard` should always be empty. A
+   non-empty result on the Pi is a red flag, not a normal working state.
+
+2. **`?v=<SERVER_VERSION>` reports the commit at last service start, not what's
+   on disk.** `SERVER_VERSION` is computed once at process start
+   (`git rev-parse --short HEAD`, server.js line 14), while `express.static`
+   reads files per-request. The stamp injected into the HTML (`?v={{VERSION}}`)
+   and broadcast to clients as `version` can therefore be *wrong* — it describes
+   the boot-time commit, not the current file contents on disk.
+   **Corollary:** a `.jsx` change reaches **ONE** device on a hard refresh (that
+   device re-fetches the file, which the static middleware serves fresh from
+   disk), but reaches **ALL** devices only after `sudo systemctl restart
+   opboard`, because both the `?v=` cache-buster and the broadcast `version` are
+   frozen at boot — nothing else triggers a re-fetch or the clients'
+   `location.reload()`. This corrects the earlier §7 phrasing that implied a
+   `.jsx` change needs "only a browser hard-refresh."
 
 ---
 
