@@ -32,23 +32,56 @@ function abbreviateNote(note,customAbbrevs=[]){
 }
 
 // ── ScaledWrapper ─────────────────────────────────────────────────────────────
-function ScaledWrapper({designW,designH,children}){
-  const [scale,setScale]=useState(1);
-  const ref=useRef(null);
+function ScaledWrapper({children,designW,designH}){
+  const [box,setBox]=useState(()=>({
+    w: window.innerWidth  || designW,
+    h: window.innerHeight || designH
+  }));
   useEffect(()=>{
-    const update=()=>{
-      if(!ref.current)return;
-      const{width:w,height:h}=ref.current.getBoundingClientRect();
-      setScale(Math.min(w/designW,h/designH));
+    let r1=0,r2=0,t1=0,t2=0;
+    const measure=()=>{
+      const w=Math.round(window.innerWidth||0);
+      const h=Math.round(window.innerHeight||0);
+      if(w<50||h<50) return;                        // reject transient garbage
+      setBox(p=>(p.w===w&&p.h===h)?p:{w,h});        // no-op if unchanged
     };
-    update();
-    const ro=new ResizeObserver(update);
-    if(ref.current)ro.observe(ref.current);
-    return()=>ro.disconnect();
+    const resync=()=>{
+      measure();
+      cancelAnimationFrame(r1); cancelAnimationFrame(r2);
+      clearTimeout(t1); clearTimeout(t2);
+      r1=requestAnimationFrame(()=>{ measure(); r2=requestAnimationFrame(measure); });
+      t1=setTimeout(measure,250);
+      t2=setTimeout(measure,900);
+    };
+    const onVis=()=>{ if(!document.hidden) resync(); };
+    resync();
+    window.addEventListener("resize",resync);
+    window.addEventListener("orientationchange",resync);
+    window.addEventListener("pageshow",resync);
+    window.addEventListener("focus",resync);
+    document.addEventListener("visibilitychange",onVis);
+    const vv=window.visualViewport;
+    if(vv){ vv.addEventListener("resize",resync); vv.addEventListener("scroll",resync); }
+    return()=>{
+      cancelAnimationFrame(r1); cancelAnimationFrame(r2);
+      clearTimeout(t1); clearTimeout(t2);
+      window.removeEventListener("resize",resync);
+      window.removeEventListener("orientationchange",resync);
+      window.removeEventListener("pageshow",resync);
+      window.removeEventListener("focus",resync);
+      document.removeEventListener("visibilitychange",onVis);
+      if(vv){ vv.removeEventListener("resize",resync); vv.removeEventListener("scroll",resync); }
+    };
   },[designW,designH]);
+
+  const scale=Math.min(box.w/designW,box.h/designH);
   return(
-    <div ref={ref} style={{width:'100%',height:'100%',display:'flex',alignItems:'center',justifyContent:'center',background:'#0a0a0c',overflow:'hidden'}}>
-      <div style={{width:designW,height:designH,transform:`scale(${scale})`,transformOrigin:'center center',position:'relative',flexShrink:0}}>
+    <div style={{width:box.w+"px",height:box.h+"px",overflow:"hidden",
+                 background:"#0a0a0c",display:"flex",alignItems:"center",
+                 justifyContent:"center"}}>
+      <div data-scaled-inner style={{width:designW,height:designH,
+           transform:`scale(${scale})`,transformOrigin:"center center",
+           flexShrink:0,position:"relative"}}>
         {children}
       </div>
     </div>
