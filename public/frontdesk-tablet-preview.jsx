@@ -104,7 +104,61 @@ function abbreviateNote(note,customAbbrevs=[]){
 
 function playChimeFD(color="#ff69b4"){try{const ctx=new(window.AudioContext||window.webkitAudioContext)();const freqs=color==="#ff69b4"?[880,1100,1320]:[660,880,1100];freqs.forEach((freq,i)=>{const osc=ctx.createOscillator();const gain=ctx.createGain();osc.connect(gain);gain.connect(ctx.destination);osc.type="sine";osc.frequency.value=freq;const t=ctx.currentTime+i*0.18;gain.gain.setValueAtTime(0,t);gain.gain.linearRampToValueAtTime(0.3,t+0.04);gain.gain.exponentialRampToValueAtTime(0.001,t+0.6);osc.start(t);osc.stop(t+0.65);});}catch(e){}}
 
-function ScaledWrapper({children,designW=1340,designH=800}){const[scale,setScale]=useState(1);useEffect(()=>{const u=()=>setScale(Math.min(window.innerWidth/designW,window.innerHeight/designH));u();window.addEventListener("resize",u);return()=>window.removeEventListener("resize",u);},[designW,designH]);return(<div style={{width:"100vw",height:"100vh",overflow:"hidden",background:"#0a0a0c",display:"flex",alignItems:"center",justifyContent:"center"}}><div data-scaled-inner style={{width:designW,height:designH,transform:`scale(${scale})`,transformOrigin:"center center",flexShrink:0}}>{children}</div></div>);}
+function ScaledWrapper({children,designW=1340,designH=800}){
+  const [box,setBox]=useState(()=>({
+    w: window.innerWidth  || designW,
+    h: window.innerHeight || designH
+  }));
+  useEffect(()=>{
+    let r1=0,r2=0,t1=0,t2=0;
+    const measure=()=>{
+      const w=Math.round(window.innerWidth||0);
+      const h=Math.round(window.innerHeight||0);
+      if(w<50||h<50) return;                        // reject transient garbage
+      setBox(p=>(p.w===w&&p.h===h)?p:{w,h});        // no-op if unchanged
+    };
+    const resync=()=>{
+      measure();
+      cancelAnimationFrame(r1); cancelAnimationFrame(r2);
+      clearTimeout(t1); clearTimeout(t2);
+      r1=requestAnimationFrame(()=>{ measure(); r2=requestAnimationFrame(measure); });
+      t1=setTimeout(measure,250);
+      t2=setTimeout(measure,900);
+    };
+    const onVis=()=>{ if(!document.hidden) resync(); };
+    resync();
+    window.addEventListener("resize",resync);
+    window.addEventListener("orientationchange",resync);
+    window.addEventListener("pageshow",resync);
+    window.addEventListener("focus",resync);
+    document.addEventListener("visibilitychange",onVis);
+    const vv=window.visualViewport;
+    if(vv){ vv.addEventListener("resize",resync); vv.addEventListener("scroll",resync); }
+    return()=>{
+      cancelAnimationFrame(r1); cancelAnimationFrame(r2);
+      clearTimeout(t1); clearTimeout(t2);
+      window.removeEventListener("resize",resync);
+      window.removeEventListener("orientationchange",resync);
+      window.removeEventListener("pageshow",resync);
+      window.removeEventListener("focus",resync);
+      document.removeEventListener("visibilitychange",onVis);
+      if(vv){ vv.removeEventListener("resize",resync); vv.removeEventListener("scroll",resync); }
+    };
+  },[designW,designH]);
+
+  const scale=Math.min(box.w/designW,box.h/designH);
+  return(
+    <div style={{width:box.w+"px",height:box.h+"px",overflow:"hidden",
+                 background:"#0a0a0c",display:"flex",alignItems:"center",
+                 justifyContent:"center"}}>
+      <div data-scaled-inner style={{width:designW,height:designH,
+           transform:`scale(${scale})`,transformOrigin:"center center",
+           flexShrink:0}}>
+        {children}
+      </div>
+    </div>
+  );
+}
 
 
 const STATUSES=[{key:"ready",abbr:"Ready",numColor:"#4ade80",bg:"rgba(34,197,94,0.12)",border:"rgba(34,197,94,0.45)",glow:"0 0 20px rgba(74,222,128,0.4)"},{key:"treatment",abbr:"Reserved",numColor:"#60a5fa",bg:"rgba(59,130,246,0.12)",border:"rgba(59,130,246,0.45)",glow:"0 0 20px rgba(96,165,250,0.4)"},{key:"pending",abbr:"Awaiting FA",numColor:"#ff69b4",bg:"rgba(255,105,180,0.12)",border:"rgba(255,105,180,0.45)",glow:"0 0 20px rgba(255,105,180,0.5)"},{key:"fa",abbr:"Reviewing FA",numColor:"#facc15",bg:"rgba(234,179,8,0.10)",border:"rgba(234,179,8,0.45)",glow:"0 0 20px rgba(250,204,21,0.4)"},{key:"dirty",abbr:"Dirty",numColor:"#ff2020",bg:"rgba(255,0,0,0.15)",border:"rgba(255,0,0,0.55)",glow:"0 0 20px rgba(255,0,0,0.5)"},{key:"awaiting",abbr:"Clean",numColor:"#111114",bg:"rgba(255,255,255,0.95)",border:"rgba(255,255,255,0.95)",glow:"0 0 20px rgba(255,255,255,0.4)"},{key:"inactive",abbr:"Not In Use",numColor:"#ffffff",bg:"rgba(80,80,90,0.40)",border:"rgba(130,130,145,0.50)",glow:"none"}];

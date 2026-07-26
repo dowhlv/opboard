@@ -99,14 +99,55 @@ function abbreviateNote(note,customAbbrevs=[]){
 
 
 function ScaledWrapper({children,designW=1340,designH=800}){
-  const[scale,setScale]=useState(1);
+  const [box,setBox]=useState(()=>({
+    w: window.innerWidth  || designW,
+    h: window.innerHeight || designH
+  }));
   useEffect(()=>{
-    const u=()=>setScale(Math.min(window.innerWidth/designW,window.innerHeight/designH));
-    u();window.addEventListener("resize",u);return()=>window.removeEventListener("resize",u);
+    let r1=0,r2=0,t1=0,t2=0;
+    const measure=()=>{
+      const w=Math.round(window.innerWidth||0);
+      const h=Math.round(window.innerHeight||0);
+      if(w<50||h<50) return;                        // reject transient garbage
+      setBox(p=>(p.w===w&&p.h===h)?p:{w,h});        // no-op if unchanged
+    };
+    const resync=()=>{
+      measure();
+      cancelAnimationFrame(r1); cancelAnimationFrame(r2);
+      clearTimeout(t1); clearTimeout(t2);
+      r1=requestAnimationFrame(()=>{ measure(); r2=requestAnimationFrame(measure); });
+      t1=setTimeout(measure,250);
+      t2=setTimeout(measure,900);
+    };
+    const onVis=()=>{ if(!document.hidden) resync(); };
+    resync();
+    window.addEventListener("resize",resync);
+    window.addEventListener("orientationchange",resync);
+    window.addEventListener("pageshow",resync);
+    window.addEventListener("focus",resync);
+    document.addEventListener("visibilitychange",onVis);
+    const vv=window.visualViewport;
+    if(vv){ vv.addEventListener("resize",resync); vv.addEventListener("scroll",resync); }
+    return()=>{
+      cancelAnimationFrame(r1); cancelAnimationFrame(r2);
+      clearTimeout(t1); clearTimeout(t2);
+      window.removeEventListener("resize",resync);
+      window.removeEventListener("orientationchange",resync);
+      window.removeEventListener("pageshow",resync);
+      window.removeEventListener("focus",resync);
+      document.removeEventListener("visibilitychange",onVis);
+      if(vv){ vv.removeEventListener("resize",resync); vv.removeEventListener("scroll",resync); }
+    };
   },[designW,designH]);
+
+  const scale=Math.min(box.w/designW,box.h/designH);
   return(
-    <div style={{width:"100vw",height:"100vh",overflow:"hidden",background:"#0a0a0c",display:"flex",alignItems:"center",justifyContent:"center"}}>
-      <div data-scaled-inner style={{width:designW,height:designH,transform:`scale(${scale})`,transformOrigin:"center center",flexShrink:0,position:"relative"}}>
+    <div style={{width:box.w+"px",height:box.h+"px",overflow:"hidden",
+                 background:"#0a0a0c",display:"flex",alignItems:"center",
+                 justifyContent:"center"}}>
+      <div data-scaled-inner style={{width:designW,height:designH,
+           transform:`scale(${scale})`,transformOrigin:"center center",
+           flexShrink:0,position:"relative"}}>
         {children}
       </div>
     </div>
