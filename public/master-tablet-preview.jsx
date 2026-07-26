@@ -1346,7 +1346,7 @@ function MasterTablet(){
         <div data-header style={S.header}>
           <img src="/dentists-logo.webp" alt="Dentists of West Henderson" height="36" style={{display:"block",flexShrink:0}}/>
           <div style={{flex:1,display:"flex",flexDirection:"column",alignItems:"center",justifyContent:"center"}}>
-            <div style={S.headerTitle}>PATIENT BOARD</div>
+            <div style={S.headerTitle}>OP BOARD</div>
             <div style={{fontFamily:"'DM Sans',sans-serif",fontSize:"11px",letterSpacing:"0.18em",color:"rgba(255,255,255,0.3)",fontWeight:600,marginTop:"2px"}}>MAIN</div>
           </div>
           <div style={{fontFamily:"'DM Sans',sans-serif",fontSize:"14px",fontWeight:600,color:"rgba(255,255,255,0.75)",flexShrink:0,textAlign:"right"}}>
