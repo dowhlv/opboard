@@ -616,11 +616,12 @@ function TVDisplay() {
             const safeN=Math.max(n,1);
             const maxRooms=Math.max(rooms.length,3);
             const rowScale=3/maxRooms;
-            const numSize  =`clamp(60px,${15/safeN*rowScale}vw,480px)`;
-            const badgeSize=`clamp(33px,${14.4/safeN*rowScale}vw,240px)`;
-            const apptSize =`clamp(20px,${4.4/safeN*rowScale}vw,120px)`;
-            const noteSize =`clamp(20px,${5/safeN*rowScale}vw,60px)`;
-            const timerSize=`clamp(14px,${2/safeN*rowScale}vw,50px)`;
+            const numSize  =`clamp(${Math.max(24,Math.round(60*rowScale))}px,${15/safeN*rowScale}vw,480px)`;
+            const badgeSize=`clamp(${Math.max(14,Math.round(33*rowScale))}px,${14.4/safeN*rowScale}vw,240px)`;
+            const apptSize =`clamp(${Math.max(10,Math.round(20*rowScale))}px,${4.4/safeN*rowScale}vw,120px)`;
+            const noteSize =`clamp(${Math.max(10,Math.round(20*rowScale))}px,${5/safeN*rowScale}vw,60px)`;
+            const timerSize=`clamp(${Math.max(9,Math.round(14*rowScale))}px,${2/safeN*rowScale}vw,50px)`;
+            const noteMaxPx=Math.max(10,Math.round(60*rowScale));
             const nameSize =`clamp(24px,${5/safeN}vw,72px)`;
             const provColor=providerColors?.[name]||'#fff';
             return(
@@ -687,7 +688,7 @@ function TVDisplay() {
                                       ))}
                                     </div>
                                   )}
-                                  <FitText text={abbreviatedNotes[op]||""} maxSz={parseInt(noteSize.match(/clamp\((\d+)px,[^,]+,(\d+)px\)/)?.[2]||noteSize.match(/(\d+)px/)?.[1]||"60")} minSz={10} maxRows={3} color={note?noteCol:"transparent"} fontWeight={700}/>
+                                  <FitText text={abbreviatedNotes[op]||""} maxSz={noteMaxPx} minSz={10} maxRows={3} color={note?noteCol:"transparent"} fontWeight={700}/>
                                 </div>
                               </div>
                             </div>
