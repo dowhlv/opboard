@@ -116,19 +116,30 @@ function sortProcedures(procs){
 
 // ── Sound: generated via Web Audio API — no external file needed ──────────────
 // ── FitText: renders text that auto-shrinks to fit maxRows, never truncates ──
-function FitText({text,maxSz,minSz=10,maxRows=3,color,fontFamily,fontWeight}){
+function FitText({text,maxSz,minSz=8,maxRows=3,color,fontFamily,fontWeight}){
   const ref=useRef(null);
   const[sz,setSz]=useState(maxSz);
   useEffect(()=>{
     const el=ref.current;
     if(!el||!text)return;
+    // Measure the REAL available height from the parent container instead of
+    // guessing "maxRows * lineHeight" — that guess had no relationship to how
+    // squeezed the actual card row was, so text got clipped by the card's own
+    // overflow:hidden even when FitText thought it had shrunk enough.
+    const parent=el.parentElement;
+    const availH=parent&&parent.clientHeight>0?parent.clientHeight:maxSz*1.2*maxRows;
     let current=maxSz;
     el.style.fontSize=current+'px';
-    while(current>minSz){
-      const lineH=current*1.2;
-      const maxH=lineH*maxRows;
-      if(el.scrollHeight<=maxH+2)break;
-      current=Math.max(minSz,current-1);
+    while(current>minSz&&el.scrollHeight>availH+1){
+      current-=1;
+      el.style.fontSize=current+'px';
+    }
+    // Last-resort safety net: if it's still too big even at the configured
+    // floor (extremely dense boards), keep shrinking to a hard minimum so
+    // text is never silently cut off.
+    const hardFloor=6;
+    while(current>hardFloor&&el.scrollHeight>availH+1){
+      current-=1;
       el.style.fontSize=current+'px';
     }
     setSz(current);
@@ -137,9 +148,7 @@ function FitText({text,maxSz,minSz=10,maxRows=3,color,fontFamily,fontWeight}){
     <div ref={ref} style={{
       fontSize:sz+'px',color,fontFamily,fontWeight,
       lineHeight:1.2,wordBreak:"break-word",
-      overflowWrap:"break-word",overflow:"hidden",
-      display:"-webkit-box",WebkitBoxOrient:"vertical",
-      WebkitLineClamp:maxRows,
+      overflowWrap:"break-word",
       textAlign:"left",width:"100%"
     }}>{text}</div>
   );
@@ -661,7 +670,7 @@ function TVDisplay() {
                           </div>
                           {/* Right: badges + note */}
                           {!isInactive&&(
-                            <div style={{flex:1,display:"flex",flexDirection:"row",alignItems:"center",padding:"6px 10px 6px 0",gap:"clamp(6px,0.8vw,14px)",minWidth:0,overflow:"hidden"}}>
+                            <div style={{flex:1,display:"flex",flexDirection:"row",alignItems:"stretch",padding:"6px 10px 6px 0",gap:"clamp(6px,0.8vw,14px)",minWidth:0,overflow:"hidden"}}>
                               {/* Badges: 2-row grid */}
                               {apptTypes&&apptTypes.length>0
                                 ? <div style={{display:"grid",gridTemplateColumns:`repeat(${Math.min(Math.max(apptTypes.length,1),2)},minmax(clamp(34px,3vw,72px),auto))`,gridAutoRows:"1fr",gap:"4px",alignSelf:apptTypes.length>2?"stretch":"center",flexShrink:0,padding:"4px 0",minHeight:apptTypes.length>2?undefined:`calc(${numSize} + ${timerSize} + 14px)`}}>
@@ -676,8 +685,8 @@ function TVDisplay() {
                                 : <div style={{borderRadius:"6px",background:"transparent",border:emptyBorder,display:"flex",alignItems:"center",justifyContent:"center",alignSelf:"stretch",padding:"4px 0",minWidth:"clamp(34px,3vw,72px)",flexShrink:0}}><span style={{fontSize:apptSize,fontWeight:700,color:emptyDashCol}}>—</span></div>
                               }
                               {/* Note */}
-                              <div style={{flex:1,display:"flex",alignItems:"center",overflow:"hidden",minWidth:0}}>
-                                <div style={{display:"flex",flexDirection:"column",gap:"4px",width:"100%",minWidth:0}}>
+                              <div style={{flex:1,display:"flex",alignItems:"stretch",overflow:"hidden",minWidth:0,minHeight:0}}>
+                                <div style={{display:"flex",flexDirection:"column",gap:"4px",width:"100%",minWidth:0,height:"100%",minHeight:0}}>
                                   {procedures.length>0&&(
                                     <div style={{display:"grid",gridTemplateColumns:`repeat(${procedures.length>=10?4:3},1fr)`,gap:"4px"}}>
                                       {sortProcedures(procedures).map(p=>(
@@ -688,7 +697,9 @@ function TVDisplay() {
                                       ))}
                                     </div>
                                   )}
-                                  <FitText text={abbreviatedNotes[op]||""} maxSz={noteMaxPx} minSz={10} maxRows={3} color={note?noteCol:"transparent"} fontWeight={700}/>
+                                  <div style={{flex:1,minHeight:0,overflow:"hidden",display:"flex",alignItems:"center"}}>
+                                    <FitText text={abbreviatedNotes[op]||""} maxSz={noteMaxPx} minSz={8} maxRows={3} color={note?noteCol:"transparent"} fontWeight={700}/>
+                                  </div>
                                 </div>
                               </div>
                             </div>

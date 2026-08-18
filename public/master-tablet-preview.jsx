@@ -723,20 +723,30 @@ class ErrorBoundary extends React.Component {
 
 
 // ── FitText: renders text that auto-shrinks to fit maxRows, never truncates ──
-function FitText({text,maxSz,minSz=10,maxRows=3,color,fontFamily,fontWeight}){
+function FitText({text,maxSz,minSz=8,maxRows=3,color,fontFamily,fontWeight}){
   const ref=useRef(null);
   const[sz,setSz]=useState(maxSz);
   useEffect(()=>{
     const el=ref.current;
     if(!el||!text)return;
+    // Measure the REAL available height from the parent container instead of
+    // guessing "maxRows * lineHeight" — that guess had no relationship to how
+    // squeezed the actual card row was, so text got clipped by the card's own
+    // overflow:hidden even when FitText thought it had shrunk enough.
+    const parent=el.parentElement;
+    const availH=parent&&parent.clientHeight>0?parent.clientHeight:maxSz*1.2*maxRows;
     let current=maxSz;
     el.style.fontSize=current+'px';
-    // Shrink until content fits within maxRows * lineHeight
-    while(current>minSz){
-      const lineH=current*1.2;
-      const maxH=lineH*maxRows;
-      if(el.scrollHeight<=maxH+2)break;
-      current=Math.max(minSz,current-1);
+    while(current>minSz&&el.scrollHeight>availH+1){
+      current-=1;
+      el.style.fontSize=current+'px';
+    }
+    // Last-resort safety net: if it's still too big even at the configured
+    // floor (extremely dense boards), keep shrinking to a hard minimum so
+    // text is never silently cut off.
+    const hardFloor=6;
+    while(current>hardFloor&&el.scrollHeight>availH+1){
+      current-=1;
       el.style.fontSize=current+'px';
     }
     setSz(current);
@@ -745,9 +755,7 @@ function FitText({text,maxSz,minSz=10,maxRows=3,color,fontFamily,fontWeight}){
     <div ref={ref} style={{
       fontSize:sz+'px',color,fontFamily,fontWeight,
       lineHeight:1.2,wordBreak:"break-word",
-      overflowWrap:"break-word",overflow:"hidden",
-      display:"-webkit-box",WebkitBoxOrient:"vertical",
-      WebkitLineClamp:maxRows,
+      overflowWrap:"break-word",
       textAlign:"left",width:"100%"
     }}>{text}</div>
   );
@@ -1517,7 +1525,7 @@ function MasterTablet(){
                         {/* Right: appt badge (50% narrower than before) + note */}
                         {!isInactive&&(
                           <div style={{flex:1,display:"flex",flexDirection:"row",
-                            alignItems:"center",padding:"4px 6px",gap:"8px",minWidth:0,overflow:"hidden"}}>
+                            alignItems:"stretch",padding:"4px 6px",gap:"8px",minWidth:0,overflow:"hidden"}}>
 
                             {/* Appt type — each type gets its own fixed-width badge, letters stacked top-to-bottom upright */}
                             <button className="appt-btn"
@@ -1564,9 +1572,9 @@ function MasterTablet(){
                               onClick={e=>{if(consumeDragSuppressedClick(e))return;e.stopPropagation();if(menu){setMenu(null);return;}if(noteLocked?.op===op&&noteLocked?.by!=="master"){showMasterToast("🔒 In use");return;}noteDidSelect.current=false;noteDraftRef.current=note||"";const ip=(ops[op]?.procedures||[]).length>0?(ops[op].procedures||[]).map(p=>({...p})):prepopulateFromApptTypes(ops[op]?.apptTypes);setNoteEdit({op,draft:note||"",procs:sortProcedures(ip),openProcs:ip.map(p=>({...p}))});emitSocket('noteLock',{op,by:"master"});}}
                               style={{flex:1,textAlign:"left",
                                 padding:0,background:"transparent",border:"none",
-                                cursor:"pointer",alignSelf:"center",minWidth:0,overflow:"hidden",
-                                display:"flex",alignItems:"center"}}>
-                              <div style={{display:"flex",flexDirection:"column",gap:"3px",width:"100%",minWidth:0}}>
+                                cursor:"pointer",alignSelf:"stretch",minWidth:0,minHeight:0,overflow:"hidden",
+                                display:"flex",alignItems:"stretch"}}>
+                              <div style={{display:"flex",flexDirection:"column",gap:"3px",width:"100%",minWidth:0,height:"100%",minHeight:0}}>
                                 {procedures.length>0&&(
                                   <div style={{display:"grid",gridTemplateColumns:`repeat(${procedures.length>=10?4:3},1fr)`,gap:"3px"}}>
                                     {sortProcedures(procedures).map(p=>(
@@ -1577,21 +1585,23 @@ function MasterTablet(){
                                     ))}
                                   </div>
                                 )}
-                                <FitText
-                                  text={abbreviatedNotes[op]||(procedures.length>0?"":"Procedures & Note")}
-                                  maxSz={parseInt(notSz.match(/(\d+)px/)?.[1]||"36")}
-                                  minSz={10}
-                                  maxRows={3}
-                                  color={note
-                                    ? cfg.key==="awaiting"
-                                      ? "rgba(0,0,0,0.75)"
-                                      : "rgba(255,255,255,0.85)"
-                                    : cfg.key==="awaiting"
-                                      ? "rgba(0,0,0,0.25)"
-                                      : "rgba(255,255,255,0.18)"}
-                                  fontFamily="'DM Sans',sans-serif"
-                                  fontWeight={700}
-                                />
+                                <div style={{flex:1,minHeight:0,overflow:"hidden",display:"flex",alignItems:"center"}}>
+                                  <FitText
+                                    text={abbreviatedNotes[op]||(procedures.length>0?"":"Procedures & Note")}
+                                    maxSz={parseInt(notSz.match(/(\d+)px/)?.[1]||"36")}
+                                    minSz={8}
+                                    maxRows={3}
+                                    color={note
+                                      ? cfg.key==="awaiting"
+                                        ? "rgba(0,0,0,0.75)"
+                                        : "rgba(255,255,255,0.85)"
+                                      : cfg.key==="awaiting"
+                                        ? "rgba(0,0,0,0.25)"
+                                        : "rgba(255,255,255,0.18)"}
+                                    fontFamily="'DM Sans',sans-serif"
+                                    fontWeight={700}
+                                  />
+                                </div>
                               </div>
                             </button>
                           </div>
