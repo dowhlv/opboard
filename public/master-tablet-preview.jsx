@@ -487,7 +487,7 @@ function EditableList({ items, setItems, showColor }) {
   const [addVal,  setAddVal]  = useState("");
   const [dragIdx, setDragIdx] = useState(null);
   const [overIdx, setOverIdx] = useState(null);
-  const newItem = v => typeof items[0]==="string" ? v : {label:v,abbr:v,key:v.toLowerCase().replace(/\s+/g,"_"),numColor:"#aaaaaa",bg:"rgba(170,170,170,0.12)",border:"rgba(170,170,170,0.4)",glow:"0 0 12px rgba(170,170,170,0.3)",menuBg:"rgba(170,170,170,0.15)",menuBorder:"rgba(170,170,170,0.5)",menuHover:"rgba(170,170,170,0.25)"};
+  const newItem = v => !showColor ? v : {label:v,abbr:v,key:v.toLowerCase().replace(/\s+/g,"_"),numColor:"#aaaaaa",bg:"rgba(170,170,170,0.12)",border:"rgba(170,170,170,0.4)",glow:"0 0 12px rgba(170,170,170,0.3)",menuBg:"rgba(170,170,170,0.15)",menuBorder:"rgba(170,170,170,0.5)",menuHover:"rgba(170,170,170,0.25)"};
   return (
     <div>
       {items.map((item, i) => {
